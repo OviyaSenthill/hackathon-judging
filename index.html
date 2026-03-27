@@ -288,12 +288,11 @@
       <div class="form-group"><label>Submitter Name</label><input type="text" id="manual-team" placeholder="e.g. Jane Smith"></div>
       <div class="form-group">
         <label>Track(s) — hold Ctrl/Cmd for multiple</label>
-        <select id="manual-tracks" multiple size="10">
-          <option value="Knowledge Caper">📚 Knowledge Caper</option>
-          <option value="Loot &amp; Ledger">💰 Loot &amp; Ledger</option>
-          <option value="Fortified Infiltration">🛡️ Fortified Infiltration</option>
-          <option value="Robin Hood Reimagined">🏹 Robin Hood Reimagined</option>
-          <option value="Patient Safety Challenge Prize">🏥 Patient Safety Challenge</option>
+        <select id="manual-tracks" multiple size="9">
+          <option value="Social Impact">🌱 Social Impact / Sustainability</option>
+          <option value="Health">🏥 Health</option>
+          <option value="Education">📚 Education</option>
+          <option value="Commerce">🛒 Commerce</option>
           <option value="Best UI/UX">🎨 Best UI/UX</option>
           <option value="Best AI/ML">🤖 Best AI/ML</option>
           <option value="Best Mobile App">📱 Best Mobile App</option>
@@ -443,18 +442,17 @@ let teams = [], scores = {}, rankings = [], sponsorAwards = [];
 // sponsorAwards = [{ sponsor, award, project }]
 
 const TRACKS = [
-  // Official DiamondHacks theme tracks
-  { id: 'Knowledge Caper',             label: 'Knowledge Caper',             icon: '📚', cls: 'badge-edu'      },
-  { id: 'Loot & Ledger',               label: 'Loot & Ledger',               icon: '💰', cls: 'badge-commerce' },
-  { id: 'Fortified Infiltration',      label: 'Fortified Infiltration',      icon: '🛡️', cls: 'badge-health'   },
-  { id: 'Robin Hood Reimagined',       label: 'Robin Hood Reimagined',       icon: '🏹', cls: 'badge-social'   },
-  { id: 'Patient Safety Challenge Prize', label: 'Patient Safety Challenge', icon: '🏥', cls: 'badge-health'   },
-  // Generic tracks
-  { id: 'Best UI/UX',                  label: 'Best UI/UX',                  icon: '🎨', cls: 'badge-uiux'     },
-  { id: 'Best AI/ML',                  label: 'Best AI/ML',                  icon: '🤖', cls: 'badge-aiml'     },
-  { id: 'Best Mobile App',             label: 'Best Mobile App',             icon: '📱', cls: 'badge-mobile'   },
-  { id: 'Best Solo Hack',              label: 'Best Solo Hack',              icon: '🧑', cls: 'badge-solo'     },
-  { id: 'Best Duo Hack',               label: 'Best Duo Hack',               icon: '👥', cls: 'badge-duo'      },
+  // Main Theme Tracks
+  { id: 'Social Impact',   label: 'Social Impact / Sustainability', icon: '🌱', cls: 'badge-social'   },
+  { id: 'Health',          label: 'Health',                         icon: '🏥', cls: 'badge-health'   },
+  { id: 'Education',       label: 'Education',                      icon: '📚', cls: 'badge-edu'      },
+  { id: 'Commerce',        label: 'Commerce',                       icon: '🛒', cls: 'badge-commerce' },
+  // Generic Tracks
+  { id: 'Best UI/UX',      label: 'Best UI/UX',                     icon: '🎨', cls: 'badge-uiux'     },
+  { id: 'Best AI/ML',      label: 'Best AI/ML',                     icon: '🤖', cls: 'badge-aiml'     },
+  { id: 'Best Mobile App', label: 'Best Mobile App',                icon: '📱', cls: 'badge-mobile'   },
+  { id: 'Best Solo Hack',  label: 'Best Solo Hack',                 icon: '🧑', cls: 'badge-solo'     },
+  { id: 'Best Duo Hack',   label: 'Best Duo Hack',                  icon: '👥', cls: 'badge-duo'      },
 ];
 const TMAP = {}; TRACKS.forEach(t => TMAP[t.id] = t);
 
@@ -704,22 +702,20 @@ function parseCSVFull(text) {
 }
 
 function mapTrack(raw) {
-  // Strip "Track N: " prefix
   const cleaned = raw.replace(/^Track\s*\d+[:\-]\s*/i, '').trim();
 
-  // Official DiamondHacks theme tracks — match by name first
-  if (/knowledge.?caper/i.test(cleaned))          return 'Knowledge Caper';
-  if (/loot.{0,5}ledger/i.test(cleaned))          return 'Loot & Ledger';
-  if (/fortified|infiltration/i.test(cleaned))    return 'Fortified Infiltration';
-  if (/robin.?hood/i.test(cleaned))               return 'Robin Hood Reimagined';
-  if (/patient.?safety/i.test(cleaned))           return 'Patient Safety Challenge Prize';
+  // Main theme tracks
+  if (/social|sustain|environ/i.test(cleaned))               return 'Social Impact';
+  if (/health|medical|patient|hospital|medi/i.test(cleaned)) return 'Health';
+  if (/educ|learn|school|study|knowledge/i.test(cleaned))    return 'Education';
+  if (/commerc|financ|business|loot|ledger|money/i.test(cleaned)) return 'Commerce';
 
   // Generic tracks
-  if (/solo/i.test(cleaned))                      return 'Best Solo Hack';
-  if (/duo/i.test(cleaned))                       return 'Best Duo Hack';
-  if (/ui.?ux|design|interface/i.test(cleaned))   return 'Best UI/UX';
+  if (/solo/i.test(cleaned))                                 return 'Best Solo Hack';
+  if (/duo/i.test(cleaned))                                  return 'Best Duo Hack';
+  if (/ui.?ux|design|interface/i.test(cleaned))              return 'Best UI/UX';
   if (/\bai\b|\bml\b|machine.?learn|gemini|gpt|llm/i.test(cleaned)) return 'Best AI/ML';
-  if (/mobile|ios|android/i.test(cleaned))        return 'Best Mobile App';
+  if (/mobile|ios|android/i.test(cleaned))                   return 'Best Mobile App';
 
   return null;
 }
