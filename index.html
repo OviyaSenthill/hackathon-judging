@@ -471,12 +471,22 @@ function persist() {
 
 function startFirebaseSync() {
   window._fbOn('judging', val => {
-    if (!val) return; // empty database, nothing to load
-    // Firebase can return arrays as objects with numeric keys — normalize back to arrays
-    const toArray = v => v ? (Array.isArray(v) ? v : Object.values(v)) : [];
-    teams         = toArray(val.teams);
-    scores        = val.scores        || {};
-    rankings      = toArray(val.rankings);
+    if (!val) return;
+    const toArray = v => {
+      if (!v) return [];
+      if (Array.isArray(v)) return v.filter(Boolean);
+      return Object.values(v).filter(Boolean);
+    };
+    // Normalize teams and fix tracks inside each team
+    teams = toArray(val.teams).map(t => ({
+      ...t,
+      tracks: toArray(t.tracks)
+    }));
+    scores        = val.scores  || {};
+    rankings      = toArray(val.rankings).map(r => ({
+      ...r,
+      ranks: r.ranks || {}
+    }));
     sponsorAwards = toArray(val.sponsorAwards);
     setTimeout(() => {
       renderTeamsTable();
