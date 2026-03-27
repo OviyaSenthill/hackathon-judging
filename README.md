@@ -4,7 +4,7 @@ Internal tool for managing project scores and track winners.
 
 ## How to Use
 
-1. Open the dashboard: https://YOUR_USERNAME.github.io/hackathon-judging/
+1. Open the dashboard: https://OviyaSenthill.github.io/hackathon-judging/
 2. Import teams from the Devpost CSV export
 3. Enter judge scores manually from the Google Form responses
 4. View leaderboard and track winners
