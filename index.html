@@ -472,16 +472,16 @@ function persist() {
 function startFirebaseSync() {
   window._fbOn('judging', val => {
     if (!val) return; // empty database, nothing to load
-    if (val.teams)         teams         = val.teams;
-    if (val.scores)        scores        = val.scores;
-    if (val.rankings)      rankings      = val.rankings;
-    if (val.sponsorAwards) sponsorAwards = val.sponsorAwards;
-    // Use setTimeout to ensure DOM is fully ready before rendering
+    // Firebase can return arrays as objects with numeric keys — normalize back to arrays
+    const toArray = v => v ? (Array.isArray(v) ? v : Object.values(v)) : [];
+    teams         = toArray(val.teams);
+    scores        = val.scores        || {};
+    rankings      = toArray(val.rankings);
+    sponsorAwards = toArray(val.sponsorAwards);
     setTimeout(() => {
       renderTeamsTable();
       updateProjectSelect();
       updateStats();
-      // Re-render whichever tab is currently active
       const activePanel = document.querySelector('.panel.active');
       if (activePanel) {
         const id = activePanel.id.replace('panel-', '');
