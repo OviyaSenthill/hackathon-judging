@@ -476,9 +476,20 @@ function startFirebaseSync() {
     if (val.scores)        scores        = val.scores;
     if (val.rankings)      rankings      = val.rankings;
     if (val.sponsorAwards) sponsorAwards = val.sponsorAwards;
-    renderTeamsTable();
-    updateProjectSelect();
-    updateStats();
+    // Use setTimeout to ensure DOM is fully ready before rendering
+    setTimeout(() => {
+      renderTeamsTable();
+      updateProjectSelect();
+      updateStats();
+      // Re-render whichever tab is currently active
+      const activePanel = document.querySelector('.panel.active');
+      if (activePanel) {
+        const id = activePanel.id.replace('panel-', '');
+        if (id === 'leaderboard') refreshLeaderboard();
+        if (id === 'tracks')      refreshTracks();
+        if (id === 'rankings')    refreshRankingsTab();
+      }
+    }, 100);
     const el = document.getElementById('autosave-msg');
     if (el) el.textContent = '✅ synced ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
   });
