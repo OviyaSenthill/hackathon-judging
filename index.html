@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hackathon Judging Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a26;
+    --border: #2a2a3a;
+    --accent: #6c63ff;
+    --accent2: #ff6584;
+    --accent3: #43e97b;
+    --text: #e8e8f0;
+    --muted: #6b6b80;
+    --gold: #ffd166;
+    --silver: #b0b8cc;
+    --bronze: #cd7c4a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(108,99,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(108,99,255,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrapper { position: relative; z-index: 1; }
+
+  /* HEADER */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 36px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(10,10,15,0.9);
+    backdrop-filter: blur(10px);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.4rem;
+    letter-spacing: -0.02em;
+  }
+  .logo span { color: var(--accent); }
+  .header-stats {
+    display: flex;
+    gap: 24px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+  .header-stats strong { color: var(--text); }
+
+  /* TABS */
+  .tabs {
+    display: flex;
+    gap: 4px;
+    padding: 20px 36px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-family: 'Syne', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 10px 20px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all 0.2s;
+    letter-spacing: 0.02em;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* PANELS */
+  .panel { display: none; padding: 32px 36px; }
+  .panel.active { display: block; }
+
+  /* SECTION TITLES */
+  .section-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 1.1rem;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* IMPORT PANEL */
+  .import-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+  .card h3 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.95rem;
+    margin-bottom: 14px;
+    color: var(--text);
+  }
+
+  textarea {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    padding: 12px;
+    resize: vertical;
+    min-height: 140px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  textarea:focus { border-color: var(--accent); }
+
+  input[type="text"], input[type="number"], select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.88rem;
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color 0.2s;
+    width: 100%;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  select option { background: var(--surface2); }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: none;
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.02em;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #7d75ff; transform: translateY(-1px); }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-danger { background: rgba(255,101,132,0.15); color: var(--accent2); border: 1px solid rgba(255,101,132,0.3); }
+  .btn-danger:hover { background: rgba(255,101,132,0.25); }
+  .btn-success { background: rgba(67,233,123,0.15); color: var(--accent3); border: 1px solid rgba(67,233,123,0.3); }
+  .btn-success:hover { background: rgba(67,233,123,0.25); }
+
+  .btn-row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+
+  /* TEAMS TABLE */
+  .table-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: var(--surface2); }
+  th {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  td {
+    padding: 12px 16px;
+    font-size: 0.88rem;
+    border-bottom: 1px solid rgba(42,42,58,0.5);
+    vertical-align: middle;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(108,99,255,0.04); }
+
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-family: 'DM Mono', monospace;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .badge-track {
+    background: rgba(108,99,255,0.15);
+    color: #a89dff;
+    border: 1px solid rgba(108,99,255,0.3);
+  }
+  .badge-scored {
+    background: rgba(67,233,123,0.12);
+    color: var(--accent3);
+    border: 1px solid rgba(67,233,123,0.25);
+  }
+  .badge-unscored {
+    background: rgba(255,209,102,0.12);
+    color: var(--gold);
+    border: 1px solid rgba(255,209,102,0.25);
+  }
+
+  /* SCORES PANEL */
+  .scores-toolbar {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 24px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .scores-toolbar select { width: auto; min-width: 260px; }
+  .judge-label {
+    font-size: 0.8rem;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .rubric-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+    margin-bottom: 24px;
+  }
+
+  .rubric-category {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .rubric-category h4 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.9rem;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .rubric-category .cat-score {
+    font-family: 'DM Mono', monospace;
+    font-size: 1.1rem;
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .rubric-category p {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-bottom: 16px;
+    line-height: 1.5;
+  }
+  .score-field { margin-bottom: 12px; }
+  .score-field label {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .score-field input[type="number"] {
+    width: 80px;
+    font-family: 'DM Mono', monospace;
+    text-align: center;
+  }
+
+  .total-bar {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  .total-bar .total-label {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 1rem;
+  }
+  .total-bar .total-score {
+    font-family: 'DM Mono', monospace;
+    font-size: 2rem;
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .total-bar .total-score span { font-size: 1rem; color: var(--muted); }
+
+  /* LEADERBOARD */
+  .lb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+
+  .rank-num {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.85rem;
+    font-weight: 500;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+  }
+  .rank-1 { background: rgba(255,209,102,0.15); border-color: var(--gold); color: var(--gold); }
+  .rank-2 { background: rgba(176,184,204,0.15); border-color: var(--silver); color: var(--silver); }
+  .rank-3 { background: rgba(205,124,74,0.15); border-color: var(--bronze); color: var(--bronze); }
+
+  .score-pill {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.82rem;
+    padding: 4px 12px;
+    border-radius: 20px;
+    background: rgba(108,99,255,0.12);
+    color: #a89dff;
+    border: 1px solid rgba(108,99,255,0.25);
+  }
+
+  /* TRACK WINNERS */
+  .tracks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+    margin-top: 24px;
+  }
+  .track-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+    transition: border-color 0.2s;
+  }
+  .track-card:hover { border-color: var(--accent); }
+  .track-card .track-name {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .track-card .track-winner {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .track-card .track-score {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .track-icon { font-size: 1.1rem; }
+
+  /* NOTICE */
+  .notice {
+    background: rgba(108,99,255,0.08);
+    border: 1px solid rgba(108,99,255,0.25);
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-size: 0.85rem;
+    color: #c0baff;
+    margin-bottom: 20px;
+    line-height: 1.6;
+  }
+  .notice strong { color: var(--accent); }
+
+  /* EMPTY STATE */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+  }
+  .empty-state .empty-icon { font-size: 3rem; margin-bottom: 14px; }
+  .empty-state p { font-size: 0.9rem; }
+
+  /* PROGRESS BAR */
+  .progress-bar {
+    height: 4px;
+    background: var(--surface2);
+    border-radius: 4px;
+    margin-top: 8px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 4px;
+    transition: width 0.4s ease;
+  }
+
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group label { font-size: 0.8rem; color: var(--muted); }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .import-grid, .lb-grid, .form-row { grid-template-columns: 1fr; }
+    .tabs { padding: 16px 20px 0; overflow-x: auto; }
+    .panel { padding: 20px; }
+    header { padding: 16px 20px; }
+    .header-stats { gap: 12px; }
+  }
+
+  /* Animation */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .panel.active { animation: fadeIn 0.25s ease; }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+<header>
+  <div class="logo">judge<span>.</span>space</div>
+  <div class="header-stats">
+    <div>Teams: <strong id="stat-teams">0</strong></div>
+    <div>Scores Entered: <strong id="stat-scores">0</strong></div>
+    <div>Judges: <strong id="stat-judges">0</strong></div>
+    <div>Scored: <strong id="stat-pct">0%</strong></div>
+  </div>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('import')">① Import Teams</button>
+  <button class="tab-btn" onclick="switchTab('scores')">② Enter Scores</button>
+  <button class="tab-btn" onclick="switchTab('leaderboard')">③ Leaderboard</button>
+  <button class="tab-btn" onclick="switchTab('tracks')">④ Track Winners</button>
+</div>
+
+<!-- IMPORT PANEL -->
+<div class="panel active" id="panel-import">
+  <div class="section-title">Import Projects from Devpost CSV</div>
+  <div class="notice">
+    <strong>How to export from Devpost:</strong> Go to your hackathon admin → Manage Submissions → Export CSV. Then paste the CSV content below or upload the file. The dashboard will extract team names, project names, and track info.
+  </div>
+
+  <div class="import-grid">
+    <div class="card">
+      <h3>📋 Paste CSV Content</h3>
+      <textarea id="csv-input" placeholder="Paste your Devpost CSV content here...&#10;&#10;Expected columns: title, team, desired_prizes (or similar)&#10;&#10;Or use the manual entry section →"></textarea>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="parseCSV()">Parse CSV</button>
+        <button class="btn btn-secondary" onclick="loadSampleData()">Load Sample Data</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>✏️ Add Team Manually</h3>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Project Name</label>
+        <input type="text" id="manual-project" placeholder="e.g. EcoTrack">
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Team Name</label>
+        <input type="text" id="manual-team" placeholder="e.g. Team Sigma">
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Track(s) — hold Ctrl/Cmd for multiple</label>
+        <select id="manual-tracks" multiple size="5">
+          <option value="Social Impact">🌱 Social Impact / Sustainability</option>
+          <option value="Health">🏥 Health</option>
+          <option value="Education">📚 Education</option>
+          <option value="Commerce">🛒 Commerce</option>
+          <option value="Best UI/UX">🎨 Best UI/UX</option>
+          <option value="Best AI/ML">🤖 Best AI/ML</option>
+          <option value="Best Mobile App">📱 Best Mobile App</option>
+          <option value="Best Solo Hack">🧑 Best Solo Hack</option>
+          <option value="Best Duo Hack">👥 Best Duo Hack</option>
+        </select>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="addManualTeam()">Add Team</button>
+        <button class="btn btn-danger" onclick="clearAllTeams()">Clear All</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top: 28px;">
+    <div class="section-title">Teams <span id="team-count" style="color:var(--muted);font-size:0.85rem;font-family:'DM Mono',monospace;font-weight:400"></span></div>
+    <div class="table-wrap">
+      <table id="teams-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Project Name</th>
+            <th>Team Name</th>
+            <th>Tracks</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="teams-tbody">
+          <tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📂</div><p>No teams imported yet. Paste a CSV or add teams manually.</p></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- SCORES PANEL -->
+<div class="panel" id="panel-scores">
+  <div class="section-title">Enter Judge Scores</div>
+
+  <div class="scores-toolbar">
+    <div class="judge-label">Judge Name:</div>
+    <input type="text" id="judge-name" placeholder="e.g. Sarah Chen" style="width:200px">
+    <div class="judge-label">Project:</div>
+    <select id="project-select" onchange="loadScoreForm()">
+      <option value="">— Select a project —</option>
+    </select>
+    <button class="btn btn-secondary" onclick="prevProject()">← Prev</button>
+    <button class="btn btn-secondary" onclick="nextProject()">Next →</button>
+  </div>
+
+  <div id="score-form-area">
+    <div class="empty-state">
+      <div class="empty-icon">📊</div>
+      <p>Select a project to enter scores, or import teams first.</p>
+    </div>
+  </div>
+</div>
+
+<!-- LEADERBOARD PANEL -->
+<div class="panel" id="panel-leaderboard">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:12px;">
+    <div class="section-title" style="margin-bottom:0; flex:1">Overall Rankings</div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-secondary" onclick="refreshLeaderboard()">↻ Refresh</button>
+      <button class="btn btn-success" onclick="exportResults()">↓ Export CSV</button>
+    </div>
+  </div>
+
+  <div class="notice">
+    Rankings are based on <strong>average scores</strong> across all judges who scored each project. Judges can score 1–10 in each of the 4 rubric categories (max 40 total).
+  </div>
+
+  <div id="leaderboard-content">
+    <div class="empty-state"><div class="empty-icon">🏆</div><p>No scores yet. Enter scores to see rankings.</p></div>
+  </div>
+</div>
+
+<!-- TRACKS PANEL -->
+<div class="panel" id="panel-tracks">
+  <div class="section-title">Track Winners</div>
+  <div class="notice">
+    Winners are determined by the <strong>highest average score</strong> among teams registered in each track. A team can win multiple awards.
+  </div>
+  <div id="tracks-content">
+    <div class="empty-state"><div class="empty-icon">🎯</div><p>No data yet. Import teams and enter scores to see track winners.</p></div>
+  </div>
+</div>
+
+</div><!-- /wrapper -->
+
+<script>
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let teams = [];       // { id, project, team, tracks: [] }
+let scores = {};      // { teamId: { judgeName: { idea, experience, implementation, demo, total } } }
+
+const TRACKS = [
+  { id: 'Social Impact', label: 'Social Impact / Sustainability', icon: '🌱' },
+  { id: 'Health', label: 'Health', icon: '🏥' },
+  { id: 'Education', label: 'Education', icon: '📚' },
+  { id: 'Commerce', label: 'Commerce', icon: '🛒' },
+  { id: 'Best UI/UX', label: 'Best UI/UX', icon: '🎨' },
+  { id: 'Best AI/ML', label: 'Best AI/ML', icon: '🤖' },
+  { id: 'Best Mobile App', label: 'Best Mobile App', icon: '📱' },
+  { id: 'Best Solo Hack', label: 'Best Solo Hack', icon: '🧑' },
+  { id: 'Best Duo Hack', label: 'Best Duo Hack', icon: '👥' },
+];
+
+// ─── TABS ─────────────────────────────────────────────────────────────────────
+function switchTab(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  event.target.classList.add('active');
+  if (id === 'leaderboard') refreshLeaderboard();
+  if (id === 'tracks') refreshTracks();
+}
+
+// ─── CSV PARSE ────────────────────────────────────────────────────────────────
+function parseCSV() {
+  const raw = document.getElementById('csv-input').value.trim();
+  if (!raw) return alert('Please paste CSV content first.');
+
+  const lines = raw.split('\n').filter(l => l.trim());
+  const headers = lines[0].split(',').map(h => h.trim().replace(/"/g,'').toLowerCase());
+
+  const findCol = (...names) => names.reduce((found, n) => {
+    if (found !== -1) return found;
+    return headers.findIndex(h => h.includes(n));
+  }, -1);
+
+  const projIdx = findCol('title', 'project', 'name');
+  const teamIdx = findCol('team', 'submitter', 'author');
+  const trackIdx = findCol('prize', 'track', 'desired');
+
+  if (projIdx === -1) return alert('Could not find a project name column. Expected "title" or "project".');
+
+  const newTeams = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = parseCSVLine(lines[i]);
+    if (!cols[projIdx]) continue;
+
+    const project = cols[projIdx]?.replace(/"/g,'').trim();
+    const team = (teamIdx !== -1 ? cols[teamIdx] : '')?.replace(/"/g,'').trim() || 'Unknown Team';
+    const trackRaw = (trackIdx !== -1 ? cols[trackIdx] : '')?.replace(/"/g,'').trim() || '';
+    const tracks = trackRaw ? [trackRaw] : [];
+
+    newTeams.push({ id: Date.now() + i, project, team, tracks });
+  }
+
+  if (!newTeams.length) return alert('No valid rows found. Check your CSV format.');
+  teams = [...teams, ...newTeams];
+  renderTeamsTable();
+  updateProjectSelect();
+  updateStats();
+  alert(`✅ Imported ${newTeams.length} projects!`);
+}
+
+function parseCSVLine(line) {
+  const result = [];
+  let cur = '', inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '"') { inQuote = !inQuote; continue; }
+    if (line[i] === ',' && !inQuote) { result.push(cur); cur = ''; continue; }
+    cur += line[i];
+  }
+  result.push(cur);
+  return result;
+}
+
+function loadSampleData() {
+  teams = [
+    { id: 1, project: 'EcoTrack', team: 'Green Squad', tracks: ['Social Impact', 'Best AI/ML'] },
+    { id: 2, project: 'MediScan', team: 'HealthBots', tracks: ['Health', 'Best Mobile App'] },
+    { id: 3, project: 'LearnLoop', team: 'EduNerds', tracks: ['Education', 'Best UI/UX'] },
+    { id: 4, project: 'ShopSmart', team: 'Commerce Kings', tracks: ['Commerce'] },
+    { id: 5, project: 'AidConnect', team: 'Solo Dev Dave', tracks: ['Social Impact', 'Best Solo Hack'] },
+    { id: 6, project: 'TherapyBot', team: 'Mindful Pair', tracks: ['Health', 'Best Duo Hack', 'Best AI/ML'] },
+    { id: 7, project: 'CampusNav', team: 'Wayfinders', tracks: ['Education', 'Best Mobile App'] },
+    { id: 8, project: 'FoodSave', team: 'Waste Not', tracks: ['Social Impact', 'Commerce'] },
+    { id: 9, project: 'SkillBridge', team: 'Connectors', tracks: ['Education', 'Best UI/UX'] },
+    { id: 10, project: 'CarbonLens', team: 'ClimaTech', tracks: ['Social Impact', 'Best AI/ML'] },
+  ];
+  renderTeamsTable();
+  updateProjectSelect();
+  updateStats();
+  alert('✅ Sample data loaded! Switch to "Enter Scores" to try scoring.');
+}
+
+function addManualTeam() {
+  const project = document.getElementById('manual-project').value.trim();
+  const team = document.getElementById('manual-team').value.trim();
+  const sel = document.getElementById('manual-tracks');
+  const tracks = Array.from(sel.selectedOptions).map(o => o.value);
+
+  if (!project || !team) return alert('Please enter both a project name and team name.');
+
+  teams.push({ id: Date.now(), project, team, tracks });
+  renderTeamsTable();
+  updateProjectSelect();
+  updateStats();
+
+  document.getElementById('manual-project').value = '';
+  document.getElementById('manual-team').value = '';
+}
+
+function removeTeam(id) {
+  if (!confirm('Remove this team?')) return;
+  teams = teams.filter(t => t.id !== id);
+  delete scores[id];
+  renderTeamsTable();
+  updateProjectSelect();
+  updateStats();
+}
+
+function clearAllTeams() {
+  if (!confirm('Clear ALL teams and scores? This cannot be undone.')) return;
+  teams = [];
+  scores = {};
+  renderTeamsTable();
+  updateProjectSelect();
+  updateStats();
+}
+
+// ─── RENDER TEAMS ─────────────────────────────────────────────────────────────
+function renderTeamsTable() {
+  const tbody = document.getElementById('teams-tbody');
+  document.getElementById('team-count').textContent = `(${teams.length})`;
+
+  if (!teams.length) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📂</div><p>No teams yet.</p></div></td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = teams.map((t, i) => {
+    const teamScores = scores[t.id] || {};
+    const judgeCount = Object.keys(teamScores).length;
+    const statusBadge = judgeCount > 0
+      ? `<span class="badge badge-scored">✓ ${judgeCount} judge${judgeCount > 1 ? 's' : ''}</span>`
+      : `<span class="badge badge-unscored">Pending</span>`;
+
+    const trackBadges = t.tracks.map(tr => `<span class="badge badge-track">${tr}</span>`).join(' ');
+
+    return `<tr>
+      <td style="color:var(--muted);font-family:'DM Mono',monospace;">${i + 1}</td>
+      <td style="font-weight:500">${t.project}</td>
+      <td style="color:var(--muted)">${t.team}</td>
+      <td>${trackBadges || '<span style="color:var(--muted);font-size:0.8rem">None</span>'}</td>
+      <td>${statusBadge}</td>
+      <td><button class="btn btn-danger" style="padding:6px 12px;font-size:0.78rem" onclick="removeTeam(${t.id})">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── SCORE FORM ───────────────────────────────────────────────────────────────
+function updateProjectSelect() {
+  const sel = document.getElementById('project-select');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— Select a project —</option>' +
+    teams.map(t => `<option value="${t.id}">${t.project} (${t.team})</option>`).join('');
+  if (cur) sel.value = cur;
+}
+
+function loadScoreForm() {
+  const teamId = parseInt(document.getElementById('project-select').value);
+  const area = document.getElementById('score-form-area');
+
+  if (!teamId) {
+    area.innerHTML = '<div class="empty-state"><div class="empty-icon">📊</div><p>Select a project to score.</p></div>';
+    return;
+  }
+
+  const team = teams.find(t => t.id === teamId);
+  if (!team) return;
+
+  const judgeName = document.getElementById('judge-name').value.trim() || 'Anonymous';
+  const existing = scores[teamId]?.[judgeName] || {};
+
+  const v = (field, def = '') => existing[field] ?? def;
+
+  area.innerHTML = `
+    <div class="total-bar">
+      <div>
+        <div class="total-label">${team.project}</div>
+        <div style="font-size:0.82rem;color:var(--muted);margin-top:2px">${team.team}</div>
+        <div class="progress-bar" style="width:200px;margin-top:10px">
+          <div class="progress-fill" id="total-progress" style="width:${(v('total',0)/40)*100}%"></div>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:0.75rem;color:var(--muted);margin-bottom:4px">TOTAL SCORE</div>
+        <div class="total-score"><span id="live-total">${v('total', '—')}</span><span> / 40</span></div>
+      </div>
+    </div>
+
+    <div class="rubric-grid">
+      <div class="rubric-category">
+        <h4>💡 Idea <span class="cat-score" id="cat-idea">—</span></h4>
+        <p>Innovation · Research · Scale</p>
+        <div class="score-field">
+          <label>Innovation (1–10)</label>
+          <input type="number" min="1" max="10" id="f-innovation" value="${v('innovation')}" oninput="calcTotal()">
+        </div>
+        <div class="score-field">
+          <label>Research (1–10)</label>
+          <input type="number" min="1" max="10" id="f-research" value="${v('research')}" oninput="calcTotal()">
+        </div>
+        <div class="score-field">
+          <label>Scale (1–10)</label>
+          <input type="number" min="1" max="10" id="f-scale" value="${v('scale')}" oninput="calcTotal()">
+        </div>
+      </div>
+
+      <div class="rubric-category">
+        <h4>✨ Experience <span class="cat-score" id="cat-exp">—</span></h4>
+        <p>Usability · Practicality · Impact</p>
+        <div class="score-field">
+          <label>Usability (1–10)</label>
+          <input type="number" min="1" max="10" id="f-usability" value="${v('usability')}" oninput="calcTotal()">
+        </div>
+        <div class="score-field">
+          <label>Practicality (1–10)</label>
+          <input type="number" min="1" max="10" id="f-practicality" value="${v('practicality')}" oninput="calcTotal()">
+        </div>
+        <div class="score-field">
+          <label>Impact (1–10)</label>
+          <input type="number" min="1" max="10" id="f-impact" value="${v('impact')}" oninput="calcTotal()">
+        </div>
+      </div>
+
+      <div class="rubric-category">
+        <h4>⚙️ Implementation <span class="cat-score" id="cat-impl">—</span></h4>
+        <p>Functionality · Adaptability · Technology</p>
+        <div class="score-field">
+          <label>Functionality (1–10)</label>
+          <input type="number" min="1" max="10" id="f-functionality" value="${v('functionality')}" oninput="calcTotal()">
+        </div>
+        <div class="score-field">
+          <label>Adaptability (1–10)</label>
+          <input type="number" min="1" max="10" id="f-adaptability" value="${v('adaptability')}" oninput="calcTotal()">
+        </div>
+        <div class="score-field">
+          <label>Technology (1–10)</label>
+          <input type="number" min="1" max="10" id="f-technology" value="${v('technology')}" oninput="calcTotal()">
+        </div>
+      </div>
+
+      <div class="rubric-category">
+        <h4>🎤 Demo <span class="cat-score" id="cat-demo">—</span></h4>
+        <p>Clarity and presentation of the 2-minute pitch.</p>
+        <div class="score-field">
+          <label>Demo Score (1–10)</label>
+          <input type="number" min="1" max="10" id="f-demo" value="${v('demo')}" oninput="calcTotal()">
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="saveScores(${teamId})">💾 Save Scores</button>
+      <button class="btn btn-secondary" onclick="clearScoreForm()">✕ Clear Form</button>
+    </div>
+
+    ${Object.keys(scores[teamId] || {}).length > 0 ? `
+    <div style="margin-top:28px">
+      <div class="section-title" style="font-size:0.9rem">Previous Scores for This Project</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Judge</th><th>Idea</th><th>Experience</th><th>Implementation</th><th>Demo</th><th>Total</th><th></th></tr></thead>
+          <tbody>
+            ${Object.entries(scores[teamId]).map(([judge, sc]) => `
+              <tr>
+                <td style="font-weight:500">${judge}</td>
+                <td><span class="score-pill">${sc.idea || '—'}</span></td>
+                <td><span class="score-pill">${sc.experience || '—'}</span></td>
+                <td><span class="score-pill">${sc.implementation || '—'}</span></td>
+                <td><span class="score-pill">${sc.demo || '—'}</span></td>
+                <td style="font-family:'DM Mono',monospace;color:var(--accent)">${sc.total || '—'}</td>
+                <td><button class="btn btn-danger" style="padding:5px 10px;font-size:0.75rem" onclick="deleteJudgeScore(${teamId},'${judge}')">✕</button></td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>` : ''}
+  `;
+  calcTotal();
+}
+
+function getVal(id) {
+  const v = parseFloat(document.getElementById(id)?.value);
+  return isNaN(v) ? null : Math.min(10, Math.max(1, v));
+}
+
+function calcTotal() {
+  const innovation = getVal('f-innovation');
+  const research = getVal('f-research');
+  const scale = getVal('f-scale');
+  const usability = getVal('f-usability');
+  const practicality = getVal('f-practicality');
+  const impact = getVal('f-impact');
+  const functionality = getVal('f-functionality');
+  const adaptability = getVal('f-adaptability');
+  const technology = getVal('f-technology');
+  const demo = getVal('f-demo');
+
+  // Each category is average of its 3 sub-scores * 10, scaled to 10 max per category
+  const idea = [innovation, research, scale].every(v => v !== null)
+    ? Math.round(((innovation + research + scale) / 3) * 10) / 10 : null;
+  const exp = [usability, practicality, impact].every(v => v !== null)
+    ? Math.round(((usability + practicality + impact) / 3) * 10) / 10 : null;
+  const impl = [functionality, adaptability, technology].every(v => v !== null)
+    ? Math.round(((functionality + adaptability + technology) / 3) * 10) / 10 : null;
+
+  const catIdea = document.getElementById('cat-idea');
+  const catExp = document.getElementById('cat-exp');
+  const catImpl = document.getElementById('cat-impl');
+  const catDemo = document.getElementById('cat-demo');
+  const liveTotal = document.getElementById('live-total');
+  const prog = document.getElementById('total-progress');
+
+  if (catIdea) catIdea.textContent = idea !== null ? idea : '—';
+  if (catExp) catExp.textContent = exp !== null ? exp : '—';
+  if (catImpl) catImpl.textContent = impl !== null ? impl : '—';
+  if (catDemo) catDemo.textContent = demo !== null ? demo : '—';
+
+  if ([idea, exp, impl, demo].every(v => v !== null)) {
+    const total = Math.round((idea + exp + impl + demo) * 10) / 10;
+    if (liveTotal) liveTotal.textContent = total;
+    if (prog) prog.style.width = (total / 40 * 100) + '%';
+  } else {
+    if (liveTotal) liveTotal.textContent = '—';
+    if (prog) prog.style.width = '0%';
+  }
+
+  return { innovation, research, scale, usability, practicality, impact, functionality, adaptability, technology, demo, idea, exp, impl };
+}
+
+function saveScores(teamId) {
+  const judgeName = document.getElementById('judge-name').value.trim() || 'Anonymous';
+  const calc = calcTotal();
+
+  if (Object.values({
+    innovation: calc.innovation, research: calc.research, scale: calc.scale,
+    usability: calc.usability, practicality: calc.practicality, impact: calc.impact,
+    functionality: calc.functionality, adaptability: calc.adaptability, technology: calc.technology,
+    demo: calc.demo
+  }).some(v => v === null)) {
+    return alert('Please fill in all score fields before saving.');
+  }
+
+  const total = Math.round((calc.idea + calc.exp + calc.impl + calc.demo) * 10) / 10;
+
+  if (!scores[teamId]) scores[teamId] = {};
+  scores[teamId][judgeName] = {
+    ...calc,
+    idea: calc.idea,
+    experience: calc.exp,
+    implementation: calc.impl,
+    total
+  };
+
+  renderTeamsTable();
+  updateStats();
+  loadScoreForm(); // refresh to show saved scores
+  alert(`✅ Scores saved for ${judgeName}!`);
+}
+
+function deleteJudgeScore(teamId, judgeName) {
+  if (!confirm(`Remove scores from ${judgeName}?`)) return;
+  delete scores[teamId][judgeName];
+  renderTeamsTable();
+  updateStats();
+  loadScoreForm();
+}
+
+function clearScoreForm() {
+  ['f-innovation','f-research','f-scale','f-usability','f-practicality','f-impact',
+   'f-functionality','f-adaptability','f-technology','f-demo'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  calcTotal();
+}
+
+function prevProject() {
+  const sel = document.getElementById('project-select');
+  const idx = Array.from(sel.options).findIndex(o => o.value === sel.value);
+  if (idx > 1) { sel.selectedIndex = idx - 1; loadScoreForm(); }
+}
+
+function nextProject() {
+  const sel = document.getElementById('project-select');
+  if (sel.selectedIndex < sel.options.length - 1) { sel.selectedIndex++; loadScoreForm(); }
+}
+
+// ─── LEADERBOARD ──────────────────────────────────────────────────────────────
+function getTeamAvg(teamId) {
+  const judgeScores = scores[teamId] || {};
+  const entries = Object.values(judgeScores);
+  if (!entries.length) return null;
+  const avg = entries.reduce((s, e) => s + (e.total || 0), 0) / entries.length;
+  return Math.round(avg * 100) / 100;
+}
+
+function refreshLeaderboard() {
+  const area = document.getElementById('leaderboard-content');
+  if (!teams.length) {
+    area.innerHTML = '<div class="empty-state"><div class="empty-icon">🏆</div><p>No teams imported yet.</p></div>';
+    return;
+  }
+
+  const ranked = teams
+    .map(t => ({ ...t, avg: getTeamAvg(t.id), judgeCount: Object.keys(scores[t.id] || {}).length }))
+    .sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1));
+
+  const rankClass = i => i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
+
+  area.innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Project</th>
+            <th>Team</th>
+            <th>Avg Score</th>
+            <th>Judges</th>
+            <th>Tracks</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${ranked.map((t, i) => `
+            <tr>
+              <td><span class="rank-num ${rankClass(i)}">${i + 1}</span></td>
+              <td style="font-weight:500">${t.project}</td>
+              <td style="color:var(--muted)">${t.team}</td>
+              <td>
+                ${t.avg !== null
+                  ? `<span class="score-pill" style="font-size:0.88rem">${t.avg} <span style="color:var(--muted)">/ 40</span></span>`
+                  : '<span style="color:var(--muted);font-size:0.82rem">No scores</span>'}
+              </td>
+              <td style="font-family:'DM Mono',monospace;color:var(--muted)">${t.judgeCount}</td>
+              <td>${t.tracks.map(tr => `<span class="badge badge-track">${tr}</span>`).join(' ') || '—'}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+// ─── TRACKS ───────────────────────────────────────────────────────────────────
+function refreshTracks() {
+  const area = document.getElementById('tracks-content');
+  if (!teams.length) {
+    area.innerHTML = '<div class="empty-state"><div class="empty-icon">🎯</div><p>No data yet.</p></div>';
+    return;
+  }
+
+  // Overall top 3
+  const ranked = teams
+    .map(t => ({ ...t, avg: getTeamAvg(t.id) }))
+    .filter(t => t.avg !== null)
+    .sort((a, b) => b.avg - a.avg);
+
+  let html = '';
+
+  // Overall podium
+  html += `<div class="section-title" style="margin-bottom:16px">🏆 Overall Top 3</div>`;
+  if (ranked.length) {
+    html += '<div class="tracks-grid" style="margin-top:0">';
+    ['🥇','🥈','🥉'].forEach((medal, i) => {
+      const t = ranked[i];
+      html += `<div class="track-card">
+        <div class="track-name">${medal} ${i === 0 ? '1st Place' : i === 1 ? '2nd Place' : '3rd Place'}</div>
+        ${t ? `<div class="track-winner">${t.project}</div><div class="track-score">${t.team} · ${t.avg} / 40</div>`
+             : `<div class="track-winner" style="color:var(--muted)">TBD</div>`}
+      </div>`;
+    });
+    html += '</div>';
+  } else {
+    html += '<p style="color:var(--muted);font-size:0.88rem;margin-bottom:20px">No scored projects yet.</p>';
+  }
+
+  // Per-track winners
+  html += `<div class="section-title" style="margin-top:32px;margin-bottom:16px">🎯 Track Winners</div>`;
+  html += '<div class="tracks-grid" style="margin-top:0">';
+
+  TRACKS.forEach(track => {
+    const eligible = teams
+      .filter(t => t.tracks.includes(track.id))
+      .map(t => ({ ...t, avg: getTeamAvg(t.id) }))
+      .filter(t => t.avg !== null)
+      .sort((a, b) => b.avg - a.avg);
+
+    const winner = eligible[0];
+    html += `<div class="track-card">
+      <div class="track-name"><span class="track-icon">${track.icon}</span>${track.label}</div>
+      ${winner
+        ? `<div class="track-winner">${winner.project}</div><div class="track-score">${winner.team} · ${winner.avg} / 40</div>`
+        : `<div class="track-winner" style="color:var(--muted);font-size:0.88rem">No eligible scored teams</div>`}
+    </div>`;
+  });
+  html += '</div>';
+
+  area.innerHTML = html;
+}
+
+// ─── EXPORT ───────────────────────────────────────────────────────────────────
+function exportResults() {
+  const ranked = teams
+    .map(t => ({ ...t, avg: getTeamAvg(t.id), judgeCount: Object.keys(scores[t.id] || {}).length }))
+    .sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1));
+
+  const rows = [['Rank', 'Project', 'Team', 'Avg Score', 'Judge Count', 'Tracks']];
+  ranked.forEach((t, i) => {
+    rows.push([i + 1, t.project, t.team, t.avg ?? '', t.judgeCount, t.tracks.join('; ')]);
+  });
+
+  // Also add individual judge scores
+  rows.push([]);
+  rows.push(['--- Individual Judge Scores ---']);
+  rows.push(['Project', 'Team', 'Judge', 'Idea', 'Experience', 'Implementation', 'Demo', 'Total']);
+  teams.forEach(t => {
+    Object.entries(scores[t.id] || {}).forEach(([judge, sc]) => {
+      rows.push([t.project, t.team, judge,
+        sc.idea ?? '', sc.experience ?? '', sc.implementation ?? '', sc.demo ?? '', sc.total ?? '']);
+    });
+  });
+
+  const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'hackathon-results.csv';
+  a.click();
+}
+
+// ─── STATS ────────────────────────────────────────────────────────────────────
+function updateStats() {
+  document.getElementById('stat-teams').textContent = teams.length;
+
+  let totalScoreEntries = 0;
+  const judgeSet = new Set();
+  teams.forEach(t => {
+    const js = scores[t.id] || {};
+    Object.keys(js).forEach(j => { judgeSet.add(j); totalScoreEntries++; });
+  });
+
+  document.getElementById('stat-scores').textContent = totalScoreEntries;
+  document.getElementById('stat-judges').textContent = judgeSet.size;
+
+  const pct = teams.length
+    ? Math.round((teams.filter(t => Object.keys(scores[t.id] || {}).length > 0).length / teams.length) * 100)
+    : 0;
+  document.getElementById('stat-pct').textContent = pct + '%';
+}
+
+// Init
+updateStats();
+</script>
+</body>
+</html>
