@@ -269,12 +269,22 @@
 <!-- ① IMPORT -->
 <div class="panel active" id="panel-import">
   <div class="notice">
-    <strong>How to export from Devpost:</strong> Go to your hackathon admin → Manage Submissions → Export CSV. Paste the full content below — the parser handles multi-line project descriptions automatically and skips blank/test entries.
+    <strong>How to export from Devpost:</strong> Go to your hackathon admin → Manage Submissions → Export CSV. Either upload the file directly or paste the content below.
   </div>
 
   <div class="import-grid">
     <div class="card">
-      <h3>📋 Paste Devpost CSV</h3>
+      <h3>📋 Import Devpost CSV</h3>
+      <div style="margin-bottom:12px">
+        <label style="font-size:0.8rem;color:var(--muted);display:block;margin-bottom:6px">Upload CSV file</label>
+        <input type="file" id="csv-file-input" accept=".csv" onchange="handleFileUpload(event)"
+          style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.85rem;padding:8px 12px;width:100%;cursor:pointer">
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+        <span style="font-size:0.75rem;color:var(--muted)">or paste below</span>
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+      </div>
       <textarea id="csv-input" placeholder="Paste your full Devpost CSV content here..."></textarea>
       <div class="btn-row">
         <button class="btn btn-primary" onclick="parseDevpostCSV()">Parse CSV</button>
@@ -378,8 +388,8 @@
         </div>
       </div>
       <div>
-        <label style="font-size:0.8rem;color:var(--muted);display:block;margin-bottom:10px">Assign a rank to each project this judge saw (leave blank if they didn't see it)</label>
-        <div id="rank-inputs" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px">
+        <label style="font-size:0.8rem;color:var(--muted);display:block;margin-bottom:10px">For each project this judge saw, enter their rank (1=best) and optionally the raw rubric score (out of 40). Leave blank if they didn't see it.</label>
+        <div id="rank-inputs" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:8px">
           <div style="color:var(--muted);font-size:0.85rem;font-style:italic">Import teams first to see the ranking inputs.</div>
         </div>
       </div>
@@ -500,6 +510,7 @@ function startFirebaseSync() {
     }, 100);
     const el = document.getElementById('autosave-msg');
     if (el) el.textContent = '✅ synced ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    _lastSavedAt = Date.now();
   });
 }
 
@@ -527,24 +538,33 @@ function renderRankInputs() {
     container.innerHTML = '<div style="color:var(--muted);font-size:0.85rem;font-style:italic">Import teams first to see the ranking inputs.</div>';
     return;
   }
-  // Pre-fill if a judge is already selected
   const judgeName = document.getElementById('rank-judge-name').value.trim();
   const existing = judgeName ? rankings.find(r => r.judge === judgeName) : null;
 
   container.innerHTML = teams.map(t => {
-    const val = existing ? (existing.ranks[t.id] ?? '') : '';
-    return `<div style="display:flex;align-items:center;gap:10px;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px">
-      <span style="font-size:0.82rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.project}">${t.project}</span>
-      <input type="number" min="1" max="20" placeholder="rank" data-teamid="${t.id}"
-        value="${val}"
-        style="width:65px;font-family:'DM Mono',monospace;text-align:center;padding:5px 8px;font-size:0.85rem"
-        oninput="highlightDuplicateRanks()">
+    const rankVal  = existing ? (existing.ranks[t.id]  ?? '') : '';
+    const rubricVal = existing ? (existing.rubric?.[t.id] ?? '') : '';
+    return `<div style="display:grid;grid-template-columns:1fr 70px 70px;align-items:center;gap:8px;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px">
+      <span style="font-size:0.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.project}">${t.project}</span>
+      <div style="display:flex;flex-direction:column;gap:2px;align-items:center">
+        <span style="font-size:0.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">Rank</span>
+        <input type="number" min="1" max="20" placeholder="#" data-teamid="${t.id}" data-type="rank"
+          value="${rankVal}"
+          style="width:60px;font-family:'DM Mono',monospace;text-align:center;padding:5px 4px;font-size:0.85rem"
+          oninput="highlightDuplicateRanks()">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px;align-items:center">
+        <span style="font-size:0.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">Score</span>
+        <input type="number" min="0" max="40" placeholder="/40" data-teamid="${t.id}" data-type="rubric"
+          value="${rubricVal}"
+          style="width:60px;font-family:'DM Mono',monospace;text-align:center;padding:5px 4px;font-size:0.85rem;border-color:rgba(108,99,255,0.3)">
+      </div>
     </div>`;
   }).join('');
 }
 
 function highlightDuplicateRanks() {
-  const inputs = document.querySelectorAll('#rank-inputs input[type=number]');
+  const inputs = document.querySelectorAll('#rank-inputs input[data-type="rank"]');
   const seen = {}, dupes = new Set();
   inputs.forEach(inp => {
     const v = inp.value.trim();
@@ -557,17 +577,23 @@ function highlightDuplicateRanks() {
   });
 }
 
+// Track last known Firebase version for conflict detection
+let _lastSavedAt = null;
+
 function saveRankings() {
   const judgeName = document.getElementById('rank-judge-name').value.trim();
   if (!judgeName) return alert('Please enter the judge name.');
   const n = parseInt(document.getElementById('rank-n').value) || 10;
 
-  const inputs = document.querySelectorAll('#rank-inputs input[type=number]');
-  const ranks = {};
+  const rankInputs   = document.querySelectorAll('#rank-inputs input[data-type="rank"]');
+  const rubricInputs = document.querySelectorAll('#rank-inputs input[data-type="rubric"]');
+
+  const ranks  = {};
+  const rubric = {};
   const usedRanks = new Set();
   let hasAny = false;
 
-  for (const inp of inputs) {
+  for (const inp of rankInputs) {
     const v = inp.value.trim();
     if (!v) continue;
     const rank = parseInt(v);
@@ -578,15 +604,31 @@ function saveRankings() {
     hasAny = true;
   }
 
+  for (const inp of rubricInputs) {
+    const v = inp.value.trim();
+    if (!v) continue;
+    const score = parseFloat(v);
+    if (!isNaN(score)) rubric[inp.getAttribute('data-teamid')] = score;
+  }
+
   if (!hasAny) return alert('Please enter at least one rank.');
 
-  // Replace existing entry for this judge or add new
+  // Conflict warning — check if Firebase has newer data than what we loaded
   const existingIdx = rankings.findIndex(r => r.judge === judgeName);
-  const entry = { judge: judgeName, n, ranks };
+  if (existingIdx >= 0) {
+    const existing = rankings[existingIdx];
+    if (existing._savedAt && _lastSavedAt && existing._savedAt > _lastSavedAt) {
+      if (!confirm(`⚠️ Conflict detected! Someone else may have updated ${judgeName}'s rankings since you loaded this page.\n\nClick OK to overwrite their version, or Cancel to keep theirs.`)) return;
+    }
+  }
+
+  const entry = { judge: judgeName, n, ranks, rubric, _savedAt: Date.now() };
   if (existingIdx >= 0) rankings[existingIdx] = entry;
   else rankings.push(entry);
 
+  _lastSavedAt = Date.now();
   persist();
+  renderTeamsTable();
   renderRankingsList();
   renderGlobalScores();
   document.getElementById('rank-judge-name').value = '';
@@ -794,6 +836,19 @@ function addManualTeam() {
   document.getElementById('manual-team').value = '';
 }
 
+// ── FILE UPLOAD ───────────────────────────────────────────────────────────────
+function handleFileUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('csv-input').value = e.target.result;
+    parseDevpostCSV();
+  };
+  reader.readAsText(file);
+}
+window.handleFileUpload = handleFileUpload;
+
 function doRemoveTeam(idx) {
   idx = parseInt(idx);
   if (isNaN(idx) || idx < 0 || idx >= teams.length) return;
@@ -827,10 +882,18 @@ function renderTeamsTable() {
     tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📂</div><p>No teams imported yet.</p></div></td></tr>';
     return;
   }
+  // Build a map of how many judges ranked each team
+  const rankCountMap = {};
+  rankings.forEach(r => {
+    Object.keys(r.ranks || {}).forEach(tid => {
+      rankCountMap[tid] = (rankCountMap[tid] || 0) + 1;
+    });
+  });
+
   tbody.innerHTML = teams.map((t, i) => {
-    const jc = Object.keys(scores[t.id] || {}).length;
+    const jc = rankCountMap[String(t.id)] || 0;
     const status = jc > 0
-      ? `<span class="badge badge-scored">✓ ${jc} judge${jc>1?'s':''}</span>`
+      ? `<span class="badge badge-scored">✓ ${jc} judge${jc>1?'s':''} ranked</span>`
       : `<span class="badge badge-unscored">Pending</span>`;
     const badges = t.tracks.map(trackBadge).join('') || '<span style="color:var(--muted);font-size:0.8rem">—</span>';
     return `<tr>
@@ -1045,28 +1108,52 @@ function refreshLeaderboard() {
 }
 
 // ── TRACKS ────────────────────────────────────────────────────────────────────
+const MAIN_TRACKS  = TRACKS.filter(t => ['Social Impact','Health','Education','Commerce'].includes(t.id));
+const GENERIC_TRACKS = TRACKS.filter(t => !['Social Impact','Health','Education','Commerce'].includes(t.id));
+
 function refreshTracks() {
   const area = document.getElementById('tracks-content');
   if (!teams.length) { area.innerHTML='<div class="empty-state"><div class="empty-icon">🎯</div><p>No data yet.</p></div>'; return; }
 
   const globalResults = calcGlobalScores();
-  const globalMap = {}; // teamId -> { avg, count }
+  const globalMap = {};
   globalResults.forEach(r => { globalMap[String(r.tid)] = r; });
 
-  // Helper: get best team in a track by global score
-  function trackWinner(trackId) {
+  // Helper: get top N teams in a track by global score
+  function trackTopN(trackId, n = 3) {
     return teams
       .filter(t => t.tracks.includes(trackId))
       .map(t => ({ ...t, gs: globalMap[String(t.id)] }))
       .filter(t => t.gs)
-      .sort((a,b) => b.gs.avg - a.gs.avg)[0];
+      .sort((a,b) => b.gs.avg - a.gs.avg)
+      .slice(0, n);
   }
 
-  // Overall top 3 from global scores
-  let html = '<div class="section-title" style="margin-bottom:16px">🏆 Overall Top 3</div><div class="tracks-grid" style="margin-bottom:28px">';
-  ['🥇 1st Place','🥈 2nd Place','🥉 3rd Place'].forEach((lbl,i) => {
+  function trackCard(track) {
+    const top = trackTopN(track.id, 3);
+    const [winner, ru1, ru2] = top;
+    return `<div class="track-card">
+      <div class="track-name">${track.icon} ${track.label}</div>
+      ${winner
+        ? `<div class="track-winner">${winner.project}</div>
+           <div class="track-score">${winner.submitter} · ${winner.gs.avg.toFixed(3)}</div>
+           ${ru1 ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+             <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Runner-ups</div>
+             <div style="font-size:0.82rem;color:var(--muted)">🥈 ${ru1.project} <span style="font-family:'DM Mono',monospace;font-size:0.72rem">${ru1.gs.avg.toFixed(3)}</span></div>
+             ${ru2 ? `<div style="font-size:0.82rem;color:var(--muted);margin-top:2px">🥉 ${ru2.project} <span style="font-family:'DM Mono',monospace;font-size:0.72rem">${ru2.gs.avg.toFixed(3)}</span></div>` : ''}
+           </div>` : ''}`
+        : `<div class="track-winner" style="color:var(--muted);font-size:0.88rem">No eligible ranked teams</div>`}
+    </div>`;
+  }
+
+  // Overall top 5 (with runner-ups)
+  let html = '<div class="section-title" style="margin-bottom:16px">🏆 Overall Winners</div>';
+  html += '<div class="tracks-grid" style="margin-bottom:28px">';
+  const medals = ['🥇 1st Place','🥈 2nd Place','🥉 3rd Place','4th Place','5th Place'];
+  medals.forEach((lbl,i) => {
     const r = globalResults[i];
-    html += `<div class="track-card"><div class="track-name">${lbl}</div>
+    html += `<div class="track-card" style="${i >= 3 ? 'opacity:0.7' : ''}">
+      <div class="track-name">${lbl}</div>
       ${r ? `<div class="track-winner">${r.team ? r.team.project : '?'}</div>
              <div class="track-score">${r.team ? r.team.submitter : ''} · ${r.avg.toFixed(3)}</div>`
           : `<div class="track-winner" style="color:var(--muted)">TBD</div>`}
@@ -1074,17 +1161,16 @@ function refreshTracks() {
   });
   html += '</div>';
 
-  // Theme + generic track winners by global score
-  html += '<div class="section-title" style="margin-bottom:16px">🎯 Track Winners</div><div class="tracks-grid" style="margin-bottom:28px">';
-  TRACKS.forEach(track => {
-    const w = trackWinner(track.id);
-    html += `<div class="track-card">
-      <div class="track-name">${track.icon} ${track.label}</div>
-      ${w ? `<div class="track-winner">${w.project}</div>
-             <div class="track-score">${w.submitter} · ${w.gs.avg.toFixed(3)}</div>`
-          : `<div class="track-winner" style="color:var(--muted);font-size:0.88rem">No eligible ranked teams</div>`}
-    </div>`;
-  });
+  // Main theme tracks
+  html += '<div class="section-title" style="margin-bottom:16px">🌍 Main Theme Tracks</div>';
+  html += '<div class="tracks-grid" style="margin-bottom:28px">';
+  MAIN_TRACKS.forEach(track => { html += trackCard(track); });
+  html += '</div>';
+
+  // Generic tracks
+  html += '<div class="section-title" style="margin-bottom:16px">🛠️ Generic Tracks</div>';
+  html += '<div class="tracks-grid" style="margin-bottom:28px">';
+  GENERIC_TRACKS.forEach(track => { html += trackCard(track); });
   html += '</div>';
 
   // Sponsor awards
