@@ -526,7 +526,13 @@ const TMAP = {}; TRACKS.forEach(t => TMAP[t.id] = t);
 // ── FIREBASE SYNC ─────────────────────────────────────────────────────────────
 let _fbConnected = false;
 let _lastSavedAt = null;
-let _ignoreNextSync = false;
+// Each outbound set() triggers onValue with a snapshot; skip applying that many echoes
+// so stale/empty snapshots cannot wipe local state (e.g. CSV import vs. seed write race).
+let _suppressDbEcho = 0;
+
+function bumpSuppressDbEcho() {
+  _suppressDbEcho++;
+}
 
 function persist() {
   if (!window._fbSet) {
@@ -543,9 +549,12 @@ function persist() {
     renderTeamsTable(); updateStats();
     return;
   }
-  _ignoreNextSync = true; // our own write — don't overwrite local state when listener fires
+  bumpSuppressDbEcho();
   window._fbSet('judging', { teams, scores, rankings, sponsorAwards, judges })
-    .catch(e => console.error('Firebase write error:', e));
+    .catch(e => {
+      console.error('Firebase write error:', e);
+      _suppressDbEcho = Math.max(0, _suppressDbEcho - 1);
+    });
   const el = document.getElementById('autosave-msg');
   if (el) el.textContent = '🔄 syncing...';
 }
@@ -566,8 +575,12 @@ function startFirebaseSync() {
       }
       // Write whatever local state we have (could have just been set by CSV parse)
       if (teams.length || judges.length) {
+        bumpSuppressDbEcho();
         window._fbSet('judging', { teams, scores, rankings, sponsorAwards, judges })
-          .catch(e => console.error(e));
+          .catch(e => {
+            console.error(e);
+            _suppressDbEcho = Math.max(0, _suppressDbEcho - 1);
+          });
       }
       _fbConnected = true;
       const el = document.getElementById('autosave-msg');
@@ -587,15 +600,19 @@ function startFirebaseSync() {
       judges        = toArray(val.judges).map(j => ({ ...j, tableIds: toArray(j.tableIds) }));
       if (!judges.length) {
         judges = DEFAULT_JUDGES.map((name, i) => ({ id: Date.now() + i, name, email: '', tableIds: [] }));
-        window._fbSet('judging', { teams, scores, rankings, sponsorAwards, judges }).catch(e => {});
+        bumpSuppressDbEcho();
+        window._fbSet('judging', { teams, scores, rankings, sponsorAwards, judges })
+          .catch(e => {
+            console.error(e);
+            _suppressDbEcho = Math.max(0, _suppressDbEcho - 1);
+          });
       }
       _fbConnected = true;
     } else {
-      // Subsequent updates — only take Firebase if it wasn't triggered by our own persist()
-      if (_ignoreNextSync) {
-        _ignoreNextSync = false; // reset flag, skip this update
+      // Subsequent updates — skip snapshots that echo our own set() calls (may be stale ordering)
+      if (_suppressDbEcho > 0) {
+        _suppressDbEcho--;
       } else {
-        // Another user changed something — take their data
         teams         = toArray(val.teams).map(t => ({ ...t, tracks: toArray(t.tracks) }));
         scores        = val.scores  || {};
         rankings      = toArray(val.rankings).map(r => ({ ...r, ranks: r.ranks || {}, rubric: r.rubric || {} }));
