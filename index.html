@@ -290,6 +290,10 @@
         <button class="btn btn-primary" onclick="parseDevpostCSV()">Parse CSV</button>
         <button class="btn btn-secondary" onclick="document.getElementById('csv-input').value=''">Clear</button>
       </div>
+      <details id="csv-parse-debug-wrap" style="margin-top:14px">
+        <summary style="cursor:pointer;font-size:0.82rem;color:var(--muted);user-select:none">Parse diagnostics (last run — open if nothing happens)</summary>
+        <pre id="csv-parse-debug" style="margin-top:10px;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:0.72rem;line-height:1.45;max-height:220px;overflow:auto;white-space:pre-wrap;word-break:break-word;color:var(--text)"></pre>
+      </details>
     </div>
 
     <div class="card">
@@ -1122,108 +1126,187 @@ function mapTrack(raw) {
   return null;
 }
 
+function setCsvParseDebug(lines) {
+  const text = Array.isArray(lines) ? lines.join('\n') : String(lines);
+  const el = document.getElementById('csv-parse-debug');
+  const wrap = document.getElementById('csv-parse-debug-wrap');
+  if (el) el.textContent = text;
+  if (wrap) wrap.open = true;
+  console.warn('[CSV parse diagnostics]\n' + text);
+}
+
 function parseDevpostCSV() {
-  const raw = document.getElementById('csv-input').value.trim();
-  if (!raw) return alert('Please paste or upload a CSV file first.');
+  const lines = [];
+  const log = (s) => { lines.push(s); };
 
-  const rows = parseCSVFull(raw);
-  if (rows.length < 2) return alert('Could not parse CSV — only ' + rows.length + ' row(s) found. Make sure you uploaded the full file.');
+  try {
+    log('— ' + new Date().toISOString() + ' —');
+    log('1) parseDevpostCSV() was called (button / upload handler ran).');
 
-  const headers = rows[0].map(h => h.trim().toLowerCase());
-  const col = (...names) => names.reduce((f,n) => f!==-1 ? f : headers.findIndex(h => h.includes(n)), -1);
+    const ta = document.getElementById('csv-input');
+    if (!ta) {
+      log('FAIL: #csv-input not found in the DOM.');
+      setCsvParseDebug(lines);
+      alert('Internal error: CSV textarea missing. Check the diagnostics box below.');
+      return;
+    }
 
-  const titleIdx    = col('project title', 'title');
-  const tableIdx    = col('table number', 'table #', 'table num');
-  // 2026 format has separate columns; 2025 lumps everything into opt-in prizes
-  const mainTrackIdx    = col('please select a main track', 'select a main track', 'please select a track', 'select a track');
-  const sponsorTrackIdx = col('select a sponsor track', 'sponsor track');
-  const sideTrackIdx    = col('select a side track', 'side track');
-  const prizesIdx       = col('opt-in prizes', 'prizes'); // 2025 fallback
-  const firstIdx    = col('submitter first name', 'first name');
-  const lastIdx     = col('submitter last name', 'last name');
-  const sizeIdx     = col('how many people', 'team size', 'members');
+    const raw = ta.value.trim();
+    log('2) Textarea length (trimmed): ' + raw.length + ' chars.');
+    if (!raw) {
+      log('STOP: Empty textarea — paste CSV text or use file upload.');
+      setCsvParseDebug(lines);
+      alert('Please paste or upload a CSV file first.');
+      return;
+    }
 
-  if (titleIdx === -1) return alert('Could not find "Project Title" column. Is this a Devpost CSV?');
+    const preview = raw.slice(0, 200).replace(/\n/g, '\\n');
+    log('3) First ~200 chars: ' + preview + (raw.length > 200 ? '…' : ''));
 
-  const SKIP = new Set(['']);
-  const added = [];
-  const conflicts = [];
+    const rows = parseCSVFull(raw);
+    log('4) parseCSVFull → ' + rows.length + ' row(s).');
+    if (rows.length < 2) {
+      log('STOP: Need a header row + at least one data row.');
+      setCsvParseDebug(lines);
+      alert('Could not parse CSV — only ' + rows.length + ' row(s) found. Make sure you uploaded the full file.');
+      return;
+    }
 
-  for (let i = 1; i < rows.length; i++) {
-    const r = rows[i];
-    const title = (r[titleIdx] || '').trim();
-    if (!title || SKIP.has(title.toLowerCase())) continue;
+    const headers = rows[0].map(h => h.trim().toLowerCase());
+    log('5) Header count: ' + headers.length + '. Columns (first 25):');
+    log('   ' + headers.slice(0, 25).map((h, i) => '[' + i + '] ' + JSON.stringify(h)).join(' | '));
+    if (headers.length > 25) log('   … +' + (headers.length - 25) + ' more');
 
-    const rawMain    = (r[mainTrackIdx]    || '').trim();
-    const rawSponsor = sponsorTrackIdx !== -1 ? (r[sponsorTrackIdx] || '').trim() : '';
-    const rawSide    = sideTrackIdx    !== -1 ? (r[sideTrackIdx]    || '').trim() : '';
-    const rawPrizes  = (r[prizesIdx]       || '').trim(); // 2025 fallback
-    const first      = (r[firstIdx]        || '').trim();
-    const last       = (r[lastIdx]         || '').trim();
-    const size       = parseInt(r[sizeIdx] || '0') || 0;
-    const tableNum   = tableIdx !== -1 ? (parseInt(r[tableIdx]) || null) : null;
+    const col = (...names) => names.reduce((f,n) => f!==-1 ? f : headers.findIndex(h => h.includes(n)), -1);
 
-    const tset = new Set();
+    const titleIdx    = col('project title', 'submission title', 'project name', 'title');
+    const tableIdx    = col('table number', 'table #', 'table num');
+    const mainTrackIdx    = col('please select a main track', 'select a main track', 'please select a track', 'select a track');
+    const sponsorTrackIdx = col('select a sponsor track', 'sponsor track');
+    const sideTrackIdx    = col('select a side track', 'side track');
+    const prizesIdx       = col('opt-in prizes', 'prizes');
+    const firstIdx    = col('submitter first name', 'first name');
+    const lastIdx     = col('submitter last name', 'last name');
+    const sizeIdx     = col('how many people', 'team size', 'members');
 
-    // Main track
-    const m1 = mapTrack(rawMain); if (m1) tset.add(m1);
+    log('6) Column indices → title:' + titleIdx + ' table:' + tableIdx + ' mainTrack:' + mainTrackIdx +
+        ' sponsor:' + sponsorTrackIdx + ' side:' + sideTrackIdx + ' prizes:' + prizesIdx +
+        ' first:' + firstIdx + ' last:' + lastIdx + ' size:' + sizeIdx);
 
-    // Sponsor tracks (2026 separate column)
-    if (rawSponsor) rawSponsor.split(',').forEach(p => {
-      const m = mapTrack(p.trim()); if (m) tset.add(m);
-    });
+    if (titleIdx === -1) {
+      log('STOP: No column matched "project title" / "title". Your export may use a different header name.');
+      log('    Tip: Devpost sometimes uses "Submission Title" or similar — we can add that match if you confirm the exact header.');
+      setCsvParseDebug(lines);
+      alert('Could not find "Project Title" column. Is this a Devpost CSV? Open Parse diagnostics below for headers.');
+      return;
+    }
 
-    // Side tracks (2026 separate column)
-    if (rawSide) rawSide.split(',').forEach(p => {
-      const m = mapTrack(p.trim()); if (m) tset.add(m);
-    });
+    const SKIP = new Set(['']);
+    const added = [];
+    const conflicts = [];
+    let skippedRows = 0;
 
-    // 2025 fallback: opt-in prizes column has everything
-    if (rawPrizes && !rawSponsor && !rawSide) {
-      rawPrizes.split(',').forEach(p => {
-        p = p.trim();
-        if (p.toUpperCase().startsWith('MLH')) return;
-        const m = mapTrack(p); if (m) tset.add(m);
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      const title = (r[titleIdx] || '').trim();
+      if (!title || SKIP.has(title.toLowerCase())) {
+        skippedRows++;
+        continue;
+      }
+
+      const rawMain    = (r[mainTrackIdx]    || '').trim();
+      const rawSponsor = sponsorTrackIdx !== -1 ? (r[sponsorTrackIdx] || '').trim() : '';
+      const rawSide    = sideTrackIdx    !== -1 ? (r[sideTrackIdx]    || '').trim() : '';
+      const rawPrizes  = (r[prizesIdx]       || '').trim();
+      const first      = (r[firstIdx]        || '').trim();
+      const last       = (r[lastIdx]         || '').trim();
+      const size       = parseInt(r[sizeIdx] || '0') || 0;
+      const tableNum   = tableIdx !== -1 ? (parseInt(r[tableIdx]) || null) : null;
+
+      const tset = new Set();
+
+      const m1 = mapTrack(rawMain); if (m1) tset.add(m1);
+
+      if (rawSponsor) rawSponsor.split(',').forEach(p => {
+        const m = mapTrack(p.trim()); if (m) tset.add(m);
+      });
+
+      if (rawSide) rawSide.split(',').forEach(p => {
+        const m = mapTrack(p.trim()); if (m) tset.add(m);
+      });
+
+      if (rawPrizes && !rawSponsor && !rawSide) {
+        rawPrizes.split(',').forEach(p => {
+          p = p.trim();
+          if (p.toUpperCase().startsWith('MLH')) return;
+          const m = mapTrack(p); if (m) tset.add(m);
+        });
+      }
+
+      if (size === 1 && !tset.has('Best Solo Hack')) tset.add('Best Solo Hack');
+      else if (size === 2 && !tset.has('Best Duo Hack')) tset.add('Best Duo Hack');
+
+      const hasSolo = tset.has('Best Solo Hack');
+      const hasDuo  = tset.has('Best Duo Hack');
+      const conflict = hasSolo && hasDuo;
+      if (conflict) conflicts.push(title);
+
+      added.push({
+        id: Date.now() + i,
+        project: title,
+        submitter: [first, last].filter(Boolean).join(' ') || 'Unknown',
+        tracks: [...tset],
+        tableNum,
+        conflict: conflict || undefined,
       });
     }
 
-    // Auto-infer solo/duo from team size if not already set
-    if (size === 1 && !tset.has('Best Solo Hack')) tset.add('Best Solo Hack');
-    else if (size === 2 && !tset.has('Best Duo Hack')) tset.add('Best Duo Hack');
+    log('7) Data rows skipped (empty title): ' + skippedRows + '. Projects parsed: ' + added.length + '.');
 
-    // Flag solo+duo conflict
-    const hasSolo = tset.has('Best Solo Hack');
-    const hasDuo  = tset.has('Best Duo Hack');
-    const conflict = hasSolo && hasDuo;
-    if (conflict) conflicts.push(title);
+    if (!added.length) {
+      log('STOP: No rows produced a project title. Check title column and that rows are not all blank.');
+      if (rows[1]) log('8) Sample row 1 cells (first 8): ' + rows[1].slice(0, 8).map(c => JSON.stringify((c||'').slice(0, 40))).join(' | '));
+      setCsvParseDebug(lines);
+      alert('No valid projects found. Open Parse diagnostics below for details.');
+      return;
+    }
 
-    added.push({
-      id: Date.now() + i,
-      project: title,
-      submitter: [first, last].filter(Boolean).join(' ') || 'Unknown',
-      tracks: [...tset],
-      tableNum,
-      conflict: conflict || undefined, // flag for display
-    });
+    teams = added;
+    scores = {};
+    rankings = [];
+
+    const hasTableNums = added.some(t => t.tableNum);
+
+    log('9) Assigned teams.length = ' + teams.length + ' (in memory).');
+    log('10) Firebase: _fbSet ' + (typeof window._fbSet === 'function' ? 'available' : 'NOT READY (will use localStorage only in persist)') + '.');
+    log('    _persistGen before persist: ' + (typeof _persistGen !== 'undefined' ? _persistGen : '(n/a)'));
+
+    persist();
+
+    log('    _persistGen after persist: ' + (typeof _persistGen !== 'undefined' ? _persistGen : '(n/a)'));
+
+    const tbody = document.getElementById('teams-tbody');
+    log('11) #teams-tbody exists: ' + !!tbody + '. Calling renderTeamsTable()…');
+    renderTeamsTable();
+    updateProjectSelect();
+    updateStats();
+    log('12) After render, stat-teams text: "' + (document.getElementById('stat-teams') && document.getElementById('stat-teams').textContent) + '".');
+    log('DONE: Success — if the table is still empty, check the Teams tab / scroll; or a script error after this line in console.');
+
+    setCsvParseDebug(lines);
+
+    let msg = '✅ Imported ' + added.length + ' projects!';
+    if (hasTableNums) msg += '\n📋 Table numbers imported from CSV.';
+    if (conflicts.length) msg += '\n\n⚠️ Solo+Duo conflict detected on ' + conflicts.length + ' project(s):\n' + conflicts.join('\n') + '\n\nThese teams are flagged in red — remove them from one track manually.';
+    alert(msg);
+  } catch (err) {
+    log('EXCEPTION: ' + (err && err.message));
+    log((err && err.stack) || '');
+    setCsvParseDebug(lines);
+    alert('CSV parse crashed — see "Parse diagnostics" below and browser console (F12). Error: ' + (err && err.message));
   }
-
-  if (!added.length) return alert('No valid projects found. Check the CSV format.');
-
-  teams = added;
-  scores = {};
-  rankings = [];
-
-  // Auto-use table numbers from CSV if present
-  const hasTableNums = added.some(t => t.tableNum);
-
-  persist();
-  renderTeamsTable(); updateProjectSelect(); updateStats();
-
-  let msg = '✅ Imported ' + added.length + ' projects!';
-  if (hasTableNums) msg += '\n📋 Table numbers imported from CSV.';
-  if (conflicts.length) msg += '\n\n⚠️ Solo+Duo conflict detected on ' + conflicts.length + ' project(s):\n' + conflicts.join('\n') + '\n\nThese teams are flagged in red — remove them from one track manually.';
-  alert(msg);
 }
+window.parseDevpostCSV = parseDevpostCSV;
 // ── MANUAL ADD ────────────────────────────────────────────────────────────────
 function addManualTeam() {
   const project   = document.getElementById('manual-project').value.trim();
@@ -1247,7 +1330,12 @@ function handleFileUpload(event) {
     text = text.replace(/^\uFEFF/, ''); // strip BOM
     text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n'); // normalize line endings
     document.getElementById('csv-input').value = text;
+    setCsvParseDebug(['(file upload) Read ' + file.name + ', ' + text.length + ' chars — running parse…']);
     parseDevpostCSV();
+  };
+  reader.onerror = () => {
+    setCsvParseDebug(['(file upload) FileReader failed — could not read file.']);
+    alert('Could not read the file. See Parse diagnostics below.');
   };
   reader.readAsText(file, 'UTF-8');
 }
