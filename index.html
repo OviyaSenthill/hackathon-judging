@@ -534,8 +534,21 @@ let _lastSavedAt = null;
 // a lower _persistGen than local (out-of-order / stale echoes, e.g. empty DB after CSV import).
 let _persistGen = 0;
 
+// Firebase set() rejects undefined anywhere in the tree (e.g. team.conflict omitted as undefined).
+function stripUndefinedDeep(val) {
+  if (val === null || typeof val !== 'object') return val;
+  if (Array.isArray(val)) return val.map(stripUndefinedDeep);
+  const out = {};
+  for (const k of Object.keys(val)) {
+    const v = val[k];
+    if (v === undefined) continue;
+    out[k] = stripUndefinedDeep(v);
+  }
+  return out;
+}
+
 function judgingPayload() {
-  return { teams, scores, rankings, sponsorAwards, judges, _persistGen };
+  return stripUndefinedDeep({ teams, scores, rankings, sponsorAwards, judges, _persistGen });
 }
 
 function persist() {
@@ -1251,14 +1264,15 @@ function parseDevpostCSV() {
       const conflict = hasSolo && hasDuo;
       if (conflict) conflicts.push(title);
 
-      added.push({
-        id: Date.now() + i,
-        project: title,
-        submitter: [first, last].filter(Boolean).join(' ') || 'Unknown',
-        tracks: [...tset],
-        tableNum,
-        conflict: conflict || undefined,
-      });
+    const row = {
+      id: Date.now() + i,
+      project: title,
+      submitter: [first, last].filter(Boolean).join(' ') || 'Unknown',
+      tracks: [...tset],
+      tableNum,
+    };
+    if (conflict) row.conflict = true;
+    added.push(row);
     }
 
     log('7) Data rows skipped (empty title): ' + skippedRows + '. Projects parsed: ' + added.length + '.');
@@ -1416,7 +1430,9 @@ window.saveEditTeam = function(idx) {
   const hasDuo  = tracks.includes('Best Duo Hack');
   const conflict = hasSolo && hasDuo;
 
-  teams[idx] = { ...teams[idx], project, submitter: submitter||'Unknown', tableNum, tracks, conflict: conflict||undefined };
+  teams[idx] = { ...teams[idx], project, submitter: submitter||'Unknown', tableNum, tracks };
+  if (conflict) teams[idx].conflict = true;
+  else delete teams[idx].conflict;
   persist(); renderTeamsTable(); refreshJudgesTab();
   document.getElementById('edit-team-modal').remove();
   if (conflict) alert('⚠️ This team still has both Solo and Duo hack selected — please remove one.');
