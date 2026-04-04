@@ -526,12 +526,12 @@ const TMAP = {}; TRACKS.forEach(t => TMAP[t.id] = t);
 // ── FIREBASE SYNC ─────────────────────────────────────────────────────────────
 let _fbConnected = false;
 let _lastSavedAt = null;
-// Each outbound set() triggers onValue with a snapshot; skip applying that many echoes
-// so stale/empty snapshots cannot wipe local state (e.g. CSV import vs. seed write race).
-let _suppressDbEcho = 0;
+// Bumped on every persist(); embedded in RTDB payload. Listener ignores snapshots with
+// a lower _persistGen than local (out-of-order / stale echoes, e.g. empty DB after CSV import).
+let _persistGen = 0;
 
-function bumpSuppressDbEcho() {
-  _suppressDbEcho++;
+function judgingPayload() {
+  return { teams, scores, rankings, sponsorAwards, judges, _persistGen };
 }
 
 function persist() {
@@ -549,11 +549,11 @@ function persist() {
     renderTeamsTable(); updateStats();
     return;
   }
-  bumpSuppressDbEcho();
-  window._fbSet('judging', { teams, scores, rankings, sponsorAwards, judges })
+  _persistGen++;
+  window._fbSet('judging', judgingPayload())
     .catch(e => {
       console.error('Firebase write error:', e);
-      _suppressDbEcho = Math.max(0, _suppressDbEcho - 1);
+      _persistGen = Math.max(0, _persistGen - 1);
     });
   const el = document.getElementById('autosave-msg');
   if (el) el.textContent = '🔄 syncing...';
@@ -575,12 +575,8 @@ function startFirebaseSync() {
       }
       // Write whatever local state we have (could have just been set by CSV parse)
       if (teams.length || judges.length) {
-        bumpSuppressDbEcho();
-        window._fbSet('judging', { teams, scores, rankings, sponsorAwards, judges })
-          .catch(e => {
-            console.error(e);
-            _suppressDbEcho = Math.max(0, _suppressDbEcho - 1);
-          });
+        window._fbSet('judging', judgingPayload())
+          .catch(e => console.error(e));
       }
       _fbConnected = true;
       const el = document.getElementById('autosave-msg');
@@ -598,26 +594,26 @@ function startFirebaseSync() {
       rankings      = toArray(val.rankings).map(r => ({ ...r, ranks: r.ranks || {}, rubric: r.rubric || {} }));
       sponsorAwards = toArray(val.sponsorAwards);
       judges        = toArray(val.judges).map(j => ({ ...j, tableIds: toArray(j.tableIds) }));
+      if (typeof val._persistGen === 'number') {
+        _persistGen = Math.max(_persistGen, val._persistGen);
+      }
       if (!judges.length) {
         judges = DEFAULT_JUDGES.map((name, i) => ({ id: Date.now() + i, name, email: '', tableIds: [] }));
-        bumpSuppressDbEcho();
-        window._fbSet('judging', { teams, scores, rankings, sponsorAwards, judges })
-          .catch(e => {
-            console.error(e);
-            _suppressDbEcho = Math.max(0, _suppressDbEcho - 1);
-          });
+        window._fbSet('judging', judgingPayload()).catch(e => console.error(e));
       }
       _fbConnected = true;
     } else {
-      // Subsequent updates — skip snapshots that echo our own set() calls (may be stale ordering)
-      if (_suppressDbEcho > 0) {
-        _suppressDbEcho--;
-      } else {
+      const remoteGen = val._persistGen;
+      const stale = typeof remoteGen === 'number' && remoteGen < _persistGen;
+      if (!stale) {
         teams         = toArray(val.teams).map(t => ({ ...t, tracks: toArray(t.tracks) }));
         scores        = val.scores  || {};
         rankings      = toArray(val.rankings).map(r => ({ ...r, ranks: r.ranks || {}, rubric: r.rubric || {} }));
         sponsorAwards = toArray(val.sponsorAwards);
         judges        = toArray(val.judges).map(j => ({ ...j, tableIds: toArray(j.tableIds) }));
+        if (typeof remoteGen === 'number') {
+          _persistGen = Math.max(_persistGen, remoteGen);
+        }
       }
     }
 
