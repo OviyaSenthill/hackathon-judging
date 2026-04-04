@@ -250,9 +250,9 @@
   <div class="header-right">
     <div class="header-stats">
       <div>Teams: <strong id="stat-teams">0</strong></div>
-      <div>Scores: <strong id="stat-scores">0</strong></div>
+      <div>Rankings: <strong id="stat-scores">0</strong></div>
       <div>Judges: <strong id="stat-judges">0</strong></div>
-      <div>Scored: <strong id="stat-pct">0%</strong></div>
+      <div>Ranked: <strong id="stat-pct">0%</strong></div>
     </div>
     <div class="autosave-msg" id="autosave-msg">💾 auto-save on</div>
   </div>
@@ -260,7 +260,7 @@
 
 <div class="tabs">
   <button class="tab-btn active" onclick="switchTab('import',this)">① Import Teams</button>
-  <button class="tab-btn" onclick="switchTab('scores',this)">② Tiebreaker Scores</button>
+  <button class="tab-btn" onclick="switchTab('judges',this)">② Judges & Tables</button>
   <button class="tab-btn" onclick="switchTab('rankings',this)">③ Rankings</button>
   <button class="tab-btn" onclick="switchTab('leaderboard',this)">④ Leaderboard</button>
   <button class="tab-btn" onclick="switchTab('tracks',this)">⑤ Track Winners</button>
@@ -298,16 +298,22 @@
       <div class="form-group"><label>Submitter Name</label><input type="text" id="manual-team" placeholder="e.g. Jane Smith"></div>
       <div class="form-group">
         <label>Track(s) — hold Ctrl/Cmd for multiple</label>
-        <select id="manual-tracks" multiple size="9">
-          <option value="Social Impact">🌱 Social Impact / Sustainability</option>
-          <option value="Health">🏥 Health</option>
-          <option value="Education">📚 Education</option>
-          <option value="Commerce">🛒 Commerce</option>
-          <option value="Best UI/UX">🎨 Best UI/UX</option>
-          <option value="Best AI/ML">🤖 Best AI/ML</option>
-          <option value="Best Mobile App">📱 Best Mobile App</option>
-          <option value="Best Solo Hack">🧑 Best Solo Hack</option>
-          <option value="Best Duo Hack">👥 Best Duo Hack</option>
+        <select id="manual-tracks" multiple size="12">
+          <optgroup label="Main Theme Tracks">
+            <option value="Social Impact">🌿 Alchemy of the Earth (Social Impact)</option>
+            <option value="Health">🧪 Elixirs of Vitality (Health)</option>
+            <option value="Education">📜 The Scholar's Spellbook (Education)</option>
+            <option value="Commerce">🪙 Enchanted Commerce (Commerce)</option>
+            <option value="Wildcard">✨ The Rogue's Ritual (Wildcard)</option>
+          </optgroup>
+          <optgroup label="Side Tracks">
+            <option value="Best Solo Hack">🦸 Best Solo Hack</option>
+            <option value="Best Duo Hack">👯 Best Duo Hack</option>
+            <option value="Best Beginner Hack">🌱 Best Beginner Hack</option>
+            <option value="Best AI/ML">🧠 Best AI/ML Hack</option>
+            <option value="Best UI/UX">🎨 Best UI/UX Hack</option>
+            <option value="Best Mobile App">📱 Best Mobile Hack</option>
+          </optgroup>
         </select>
       </div>
       <div class="btn-row">
@@ -321,7 +327,7 @@
     <div class="section-title">Teams <span id="team-count" style="color:var(--muted);font-size:0.85rem;font-family:'DM Mono',monospace;font-weight:400"></span></div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>#</th><th>Project</th><th>Submitter</th><th>Tracks</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th>Table #</th><th>Project</th><th>Submitter</th><th>Tracks</th><th>Status</th><th></th><th></th></tr></thead>
         <tbody id="teams-tbody">
           <tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📂</div><p>No teams imported yet.</p></div></td></tr>
         </tbody>
@@ -330,25 +336,64 @@
   </div>
 </div>
 
-<!-- ② SCORES -->
-<div class="panel" id="panel-scores">
-  <div class="section-title">Tiebreaker Score Calculator</div>
+<!-- ② JUDGES & TABLES -->
+<div class="panel" id="panel-judges">
+  <div class="section-title">Judges & Table Assignments</div>
   <div class="notice">
-    <strong>Only use this if there's a tie in global score.</strong> Enter the rubric scores (Idea, Experience, Implementation, Demo) for the two tied teams and compare their averages out of 40. Per the judging protocol, higher average raw score wins — and if still tied, compare the relevant category score (e.g. Implementation for hardware, Experience for UI/UX).
+    <strong>Workflow:</strong> First import teams (tab ①) and assign table numbers. Then add all judges here and click <strong>Auto-Assign Tables</strong> to distribute ~10 projects per judge via round-robin. If a judge doesn't show up, use <strong>Mark Absent</strong> to redistribute their tables.
   </div>
-  <div class="scores-toolbar">
-    <span class="judge-label">Judge Name:</span>
-    <input type="text" id="judge-name" placeholder="e.g. Sarah Chen" style="width:200px">
-    <span class="judge-label">Project:</span>
-    <select id="project-select" onchange="loadScoreForm()"><option value="">— Select a project —</option></select>
-    <button class="btn btn-secondary" onclick="prevProject()">← Prev</button>
-    <button class="btn btn-secondary" onclick="nextProject()">Next →</button>
+
+  <div class="two-col" style="margin-bottom:24px">
+    <div class="card">
+      <h3>📋 Step 1 — Assign Table Numbers to Teams</h3>
+      <p style="font-size:0.82rem;color:var(--muted);margin-bottom:14px">Table numbers are assigned sequentially starting from 1. Click to auto-number all teams in order, or edit individual table numbers in the team list below.</p>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="autoAssignTableNumbers()">🔢 Auto-Number All Teams</button>
+        <button class="btn btn-secondary" onclick="clearTableNumbers()">Clear Numbers</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>👤 Step 2 — Add Judges</h3>
+      <div class="form-group"><label>Judge Name</label><input type="text" id="judge-add-name" placeholder="e.g. Sarah Chen"></div>
+      <div class="form-group"><label>Email (optional)</label><input type="text" id="judge-add-email" placeholder="e.g. sarah@ucsd.edu"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="addJudge()">➕ Add Judge</button>
+        <button class="btn btn-secondary" onclick="importJudgeList()">📋 Paste Judge List</button>
+        <button class="btn btn-success" onclick="loadDefaultJudges()">⚡ Load DiamondHacks Judges</button>
+      </div>
+      <textarea id="judge-paste-area" placeholder="Paste one judge name per line..." style="margin-top:12px;min-height:80px;display:none"></textarea>
+      <button class="btn btn-secondary" id="judge-paste-btn" onclick="confirmJudgePaste()" style="display:none;margin-top:8px">Import from List</button>
+    </div>
   </div>
-  <div id="score-form-area">
-    <div class="empty-state"><div class="empty-icon">📊</div><p>Select a project to enter scores, or import teams first.</p></div>
+
+  <div class="card" style="margin-bottom:24px">
+    <h3>⚡ Step 3 — Auto-Assign & Manage</h3>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+      <button class="btn btn-primary" onclick="autoAssignJudges()">🎲 Auto-Assign Tables to Judges</button>
+      <button class="btn btn-success" onclick="exportJudgeAssignments()">↓ Export Assignments CSV</button>
+      <span style="font-size:0.82rem;color:var(--muted)" id="assign-stats"></span>
+    </div>
+  </div>
+
+  <div class="section-title">Judge Roster <span id="judge-count" style="color:var(--muted);font-size:0.82rem;font-family:'DM Mono',monospace;font-weight:400"></span></div>
+  <div id="judges-list">
+    <div class="empty-state"><div class="empty-icon">👤</div><p>No judges added yet.</p></div>
+  </div>
+
+  <div style="margin-top:28px">
+    <div class="section-title">Team Table Numbers</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Table #</th><th>Project</th><th>Submitter</th><th>Tracks</th><th>Assigned Judge(s)</th></tr></thead>
+        <tbody id="table-assignments-tbody">
+          <tr><td colspan="5"><div class="empty-state"><div class="empty-icon">🗂️</div><p>Import teams and assign table numbers to see this list.</p></div></td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 
+<!-- ③ SCORES -->
 <!-- ③ LEADERBOARD -->
 <div class="panel" id="panel-leaderboard">
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:12px;">
@@ -396,7 +441,15 @@
     </div>
   </div>
 
-  <div class="section-title">All Judge Rankings</div>
+  <div style="margin-top:28px">
+    <div class="section-title">🔍 Validation Check</div>
+    <div class="notice">Run this before announcing winners to catch any issues with rankings or assignments.</div>
+    <button class="btn btn-primary" onclick="runValidationCheck()" style="margin-bottom:14px">Run Checks</button>
+    <div id="validation-output" style="margin-top:8px"></div>
+  </div>
+
+  <div style="margin-top:28px">
+    <div class="section-title">All Judge Rankings</div>
   <div id="rankings-list">
     <div class="empty-state"><div class="empty-icon">🏅</div><p>No rankings entered yet.</p></div>
   </div>
@@ -447,22 +500,25 @@ window.dispatchEvent(new Event('firebase-ready'));
 
 <script>
 // ── STATE ─────────────────────────────────────────────────────────────────────
-let teams = [], scores = {}, rankings = [], sponsorAwards = [];
-// rankings = [{ judge, n, ranks: { teamId: rankNumber } }]
+let teams = [], scores = {}, rankings = [], sponsorAwards = [], judges = [];
+// rankings    = [{ judge, n, ranks: { teamId: rankNumber }, rubric: { teamId: score } }]
 // sponsorAwards = [{ sponsor, award, project }]
+// judges      = [{ id, name, email, tableIds: [] }]  tableIds = team ids assigned
 
 const TRACKS = [
   // Main Theme Tracks
-  { id: 'Social Impact',   label: 'Social Impact / Sustainability', icon: '🌱', cls: 'badge-social'   },
-  { id: 'Health',          label: 'Health',                         icon: '🏥', cls: 'badge-health'   },
-  { id: 'Education',       label: 'Education',                      icon: '📚', cls: 'badge-edu'      },
-  { id: 'Commerce',        label: 'Commerce',                       icon: '🛒', cls: 'badge-commerce' },
-  // Generic Tracks
-  { id: 'Best UI/UX',      label: 'Best UI/UX',                     icon: '🎨', cls: 'badge-uiux'     },
-  { id: 'Best AI/ML',      label: 'Best AI/ML',                     icon: '🤖', cls: 'badge-aiml'     },
-  { id: 'Best Mobile App', label: 'Best Mobile App',                icon: '📱', cls: 'badge-mobile'   },
-  { id: 'Best Solo Hack',  label: 'Best Solo Hack',                 icon: '🧑', cls: 'badge-solo'     },
-  { id: 'Best Duo Hack',   label: 'Best Duo Hack',                  icon: '👥', cls: 'badge-duo'      },
+  { id: 'Social Impact',  label: 'Alchemy of the Earth (Social Impact)',  icon: '🌿', cls: 'badge-social',   main: true  },
+  { id: 'Health',         label: 'Elixirs of Vitality (Health)',           icon: '🧪', cls: 'badge-health',   main: true  },
+  { id: 'Education',      label: "The Scholar's Spellbook (Education)",    icon: '📜', cls: 'badge-edu',      main: true  },
+  { id: 'Commerce',       label: 'Enchanted Commerce (Commerce)',           icon: '🪙', cls: 'badge-commerce', main: true  },
+  { id: 'Wildcard',       label: "The Rogue's Ritual (Wildcard)",          icon: '✨', cls: 'badge-uiux',     main: true  },
+  // Side Tracks
+  { id: 'Best Solo Hack',    label: 'Best Solo Hack',    icon: '🦸', cls: 'badge-solo',    main: false },
+  { id: 'Best Duo Hack',     label: 'Best Duo Hack',     icon: '👯', cls: 'badge-duo',     main: false },
+  { id: 'Best Beginner Hack',label: 'Best Beginner Hack',icon: '🌱', cls: 'badge-social',  main: false },
+  { id: 'Best AI/ML',        label: 'Best AI/ML Hack',   icon: '🧠', cls: 'badge-aiml',    main: false },
+  { id: 'Best UI/UX',        label: 'Best UI/UX Hack',   icon: '🎨', cls: 'badge-uiux',    main: false },
+  { id: 'Best Mobile App',   label: 'Best Mobile Hack',  icon: '📱', cls: 'badge-mobile',  main: false },
 ];
 const TMAP = {}; TRACKS.forEach(t => TMAP[t.id] = t);
 
@@ -470,47 +526,54 @@ const TMAP = {}; TRACKS.forEach(t => TMAP[t.id] = t);
 let _syncing = false;
 
 function persist() {
-  if (!window._fbSet) return; // Firebase not ready yet
-  const data = { teams, scores, rankings, sponsorAwards };
-  window._fbSet('judging', data).catch(e => console.error('Firebase write error:', e));
+  if (!window._fbSet) return;
+  window._fbSet('judging', { teams, scores, rankings, sponsorAwards, judges }).catch(e => console.error('Firebase write error:', e));
   const el = document.getElementById('autosave-msg');
   if (el) el.textContent = '🔄 syncing...';
 }
 
 function startFirebaseSync() {
   window._fbOn('judging', val => {
-    if (!val) return;
+    if (!val) {
+      // Empty database — seed with default judges
+      judges = DEFAULT_JUDGES.map((name, i) => ({ id: Date.now() + i, name, email: '', tableIds: [] }));
+      persist();
+      return;
+    }
     const toArray = v => {
       if (!v) return [];
       if (Array.isArray(v)) return v.filter(Boolean);
       return Object.values(v).filter(Boolean);
     };
-    // Normalize teams and fix tracks inside each team
-    teams = toArray(val.teams).map(t => ({
-      ...t,
-      tracks: toArray(t.tracks)
-    }));
+    teams         = toArray(val.teams).map(t => ({ ...t, tracks: toArray(t.tracks) }));
     scores        = val.scores  || {};
-    rankings      = toArray(val.rankings).map(r => ({
-      ...r,
-      ranks: r.ranks || {}
-    }));
+    rankings      = toArray(val.rankings).map(r => ({ ...r, ranks: r.ranks || {}, rubric: r.rubric || {} }));
     sponsorAwards = toArray(val.sponsorAwards);
+    judges        = toArray(val.judges).map(j => ({ ...j, tableIds: toArray(j.tableIds) }));
+
+    // If judges list is empty (first time or cleared), seed with defaults
+    if (!judges.length) {
+      judges = DEFAULT_JUDGES.map((name, i) => ({ id: Date.now() + i, name, email: '', tableIds: [] }));
+      persist();
+    }
+
     setTimeout(() => {
       renderTeamsTable();
       updateProjectSelect();
       updateStats();
+      refreshJudgesTab();
       const activePanel = document.querySelector('.panel.active');
       if (activePanel) {
         const id = activePanel.id.replace('panel-', '');
         if (id === 'leaderboard') refreshLeaderboard();
         if (id === 'tracks')      refreshTracks();
         if (id === 'rankings')    refreshRankingsTab();
+        if (id === 'judges')      refreshJudgesTab();
       }
     }, 100);
+    _lastSavedAt = Date.now();
     const el = document.getElementById('autosave-msg');
     if (el) el.textContent = '✅ synced ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-    _lastSavedAt = Date.now();
   });
 }
 
@@ -523,6 +586,238 @@ function switchTab(id, btn) {
   if (id === 'rankings')    refreshRankingsTab();
   if (id === 'leaderboard') refreshLeaderboard();
   if (id === 'tracks')      refreshTracks();
+  if (id === 'judges')      refreshJudgesTab();
+}
+
+// ── JUDGES & TABLE ASSIGNMENTS ────────────────────────────────────────────────
+
+function autoAssignTableNumbers() {
+  if (!teams.length) return alert('Import teams first.');
+  if (!confirm(`Auto-number all ${teams.length} teams with table numbers 1–${teams.length}?`)) return;
+  teams = teams.map((t, i) => ({ ...t, tableNum: i + 1 }));
+  persist(); renderTeamsTable(); refreshJudgesTab();
+}
+
+function clearTableNumbers() {
+  if (!confirm('Clear all table numbers?')) return;
+  teams = teams.map(t => ({ ...t, tableNum: null }));
+  persist(); renderTeamsTable(); refreshJudgesTab();
+}
+
+function loadDefaultJudges() {
+  if (judges.length > 0 && !confirm(`This will add the 31 DiamondHacks judges to your existing list of ${judges.length}. Continue?`)) return;
+  let added = 0;
+  DEFAULT_JUDGES.forEach(name => {
+    if (!judges.find(j => j.name.toLowerCase() === name.toLowerCase())) {
+      judges.push({ id: Date.now() + Math.random(), name, email: '', tableIds: [] });
+      added++;
+    }
+  });
+  persist(); refreshJudgesTab();
+  alert(`✅ Added ${added} judges (${DEFAULT_JUDGES.length - added} already existed).`);
+}
+
+function addJudge() {
+  const name  = document.getElementById('judge-add-name').value.trim();
+  const email = document.getElementById('judge-add-email').value.trim();
+  if (!name) return alert('Please enter a judge name.');
+  if (judges.find(j => j.name.toLowerCase() === name.toLowerCase())) return alert(`${name} is already in the list.`);
+  judges.push({ id: Date.now(), name, email, tableIds: [] });
+  document.getElementById('judge-add-name').value = '';
+  document.getElementById('judge-add-email').value = '';
+  persist(); refreshJudgesTab();
+}
+
+function importJudgeList() {
+  const area  = document.getElementById('judge-paste-area');
+  const btn   = document.getElementById('judge-paste-btn');
+  area.style.display = area.style.display === 'none' ? 'block' : 'none';
+  btn.style.display  = btn.style.display  === 'none' ? 'block' : 'none';
+}
+
+function confirmJudgePaste() {
+  const lines = document.getElementById('judge-paste-area').value.split('\n').map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return alert('No names found.');
+  let added = 0;
+  lines.forEach(name => {
+    if (!judges.find(j => j.name.toLowerCase() === name.toLowerCase())) {
+      judges.push({ id: Date.now() + Math.random(), name, email: '', tableIds: [] });
+      added++;
+    }
+  });
+  document.getElementById('judge-paste-area').value = '';
+  document.getElementById('judge-paste-area').style.display = 'none';
+  document.getElementById('judge-paste-btn').style.display = 'none';
+  persist(); refreshJudgesTab();
+  alert(`✅ Added ${added} judges (${lines.length - added} duplicates skipped).`);
+}
+
+function removeJudge(idx) {
+  idx = parseInt(idx);
+  if (isNaN(idx) || idx < 0 || idx >= judges.length) return;
+  const j = judges[idx];
+  if (!confirm('Remove ' + j.name + ' from the judge roster?')) return;
+  judges.splice(idx, 1);
+  persist(); refreshJudgesTab();
+}
+window.removeJudge = removeJudge;
+
+window.doRemoveJudge = function(idx) {
+  idx = parseInt(idx);
+  if (isNaN(idx) || idx < 0 || idx >= judges.length) return;
+  const j = judges[idx];
+  if (!confirm('Remove ' + j.name + ' from the judge roster?')) return;
+  judges.splice(idx, 1);
+  persist(); refreshJudgesTab();
+};
+
+window.doAbsent = function(idx) {
+  idx = parseInt(idx);
+  if (isNaN(idx) || idx < 0 || idx >= judges.length) return;
+  markAbsent(idx);
+};
+
+window.doReinstate = function(idx) {
+  idx = parseInt(idx);
+  if (isNaN(idx) || idx < 0 || idx >= judges.length) return;
+  judges[idx].absent = false;
+  persist(); refreshJudgesTab();
+};
+
+function autoAssignJudges() {
+  if (!judges.length) return alert('Add judges first.');
+  const numbered = teams.filter(t => t.tableNum);
+  if (!numbered.length) return alert('Assign table numbers to teams first (Step 1).');
+  if (!confirm(`Auto-assign ${numbered.length} tables to ${judges.length} judges (~${Math.ceil(numbered.length/judges.length)} tables each)?\n\nThis will clear existing assignments.`)) return;
+
+  // Clear existing
+  judges = judges.map(j => ({ ...j, tableIds: [] }));
+
+  // Sort teams by table number, then round-robin assign
+  const sorted = [...numbered].sort((a,b) => (a.tableNum||0) - (b.tableNum||0));
+  sorted.forEach((team, i) => {
+    judges[i % judges.length].tableIds.push(team.id);
+  });
+
+  persist(); refreshJudgesTab();
+  alert(`✅ Tables assigned! Each judge has ${Math.floor(numbered.length/judges.length)}–${Math.ceil(numbered.length/judges.length)} tables.`);
+}
+
+function markAbsent(judgeIdx) {
+  judgeIdx = parseInt(judgeIdx);
+  if (isNaN(judgeIdx) || judgeIdx < 0 || judgeIdx >= judges.length) return;
+  const absent = judges[judgeIdx];
+  if (!absent.tableIds.length) return alert(absent.name + ' has no tables assigned.');
+  const available = judges.filter((j, i) => i !== judgeIdx && !j.absent);
+  if (!available.length) return alert('No other judges available to redistribute to.');
+  if (!confirm('Mark ' + absent.name + ' as absent and redistribute their ' + absent.tableIds.length + ' tables to other judges?')) return;
+
+  absent.absent = true;
+  const reassigned = [];
+  absent.tableIds.forEach((tid, i) => {
+    const target = available[i % available.length];
+    target.tableIds.push(tid);
+    const team = teams.find(t => String(t.id) === String(tid));
+    reassigned.push({ table: team?.tableNum || '?', project: team?.project || '?', to: target.name });
+  });
+  absent.tableIds = [];
+  persist(); refreshJudgesTab();
+  const summary = reassigned.map(r => '  Table ' + r.table + ' (' + r.project + ') → ' + r.to).join('\n');
+  alert('✅ Redistributed ' + reassigned.length + ' tables from ' + absent.name + ':\n\n' + summary + '\n\nPlease notify affected judges of their updated assignments.');
+}
+window.markAbsent = markAbsent;
+
+function reinstateJudge(judgeIdx) {
+  judgeIdx = parseInt(judgeIdx);
+  if (isNaN(judgeIdx) || judgeIdx < 0 || judgeIdx >= judges.length) return;
+  judges[judgeIdx].absent = false;
+  persist(); refreshJudgesTab();
+}
+window.reinstateJudge = reinstateJudge;
+
+function exportJudgeAssignments() {
+  if (!judges.length) return alert('No judges to export.');
+  const rows = [['Judge Name', 'Email', 'Status', 'Table Numbers', 'Projects']];
+  judges.forEach(j => {
+    const tables = j.tableIds.map(tid => {
+      const t = teams.find(tm => String(tm.id) === String(tid));
+      return t ? `${t.tableNum || '?'}` : '?';
+    }).join(', ');
+    const projects = j.tableIds.map(tid => {
+      const t = teams.find(tm => String(tm.id) === String(tid));
+      return t ? t.project : '?';
+    }).join(', ');
+    rows.push([j.name, j.email || '', j.absent ? 'ABSENT' : 'Active', tables, projects]);
+  });
+  const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  a.download = 'judge-assignments.csv'; a.click();
+}
+
+function refreshJudgesTab() {
+  document.getElementById('judge-count').textContent = `(${judges.length})`;
+
+  // Update assign stats
+  const assigned = judges.filter(j => j.tableIds.length > 0).length;
+  const totalAssigned = judges.reduce((s, j) => s + j.tableIds.length, 0);
+  document.getElementById('assign-stats').textContent =
+    judges.length ? `${assigned}/${judges.length} judges assigned · ${totalAssigned} table assignments` : '';
+
+  // Render judge list
+  const el = document.getElementById('judges-list');
+  if (!judges.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">👤</div><p>No judges added yet.</p></div>';
+  } else {
+    el.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Judge</th><th>Email</th><th>Status</th><th>Tables</th><th>Projects Assigned</th><th></th></tr></thead>
+      <tbody>${judges.map((j, i) => {
+        const tableNums = j.tableIds.map(tid => {
+          const t = teams.find(tm => String(tm.id) === String(tid));
+          return t ? (t.tableNum || '?') : '?';
+        }).sort((a,b) => a-b).join(', ');
+        const statusBadge = j.absent
+          ? `<span class="badge badge-health">ABSENT</span>`
+          : `<span class="badge badge-scored">Active</span>`;
+        return `<tr style="${j.absent ? 'opacity:0.5' : ''}">
+          <td style="font-weight:500">${j.name}</td>
+          <td style="color:var(--muted);font-size:0.82rem">${j.email||'—'}</td>
+          <td>${statusBadge}</td>
+          <td style="font-family:'DM Mono',monospace;font-size:0.8rem">${tableNums || '—'}</td>
+          <td style="color:var(--muted);font-size:0.82rem">${j.tableIds.length} projects</td>
+          <td style="display:flex;gap:6px;flex-wrap:wrap">
+            ${j.absent
+              ? `<button class="btn btn-secondary" style="padding:4px 10px;font-size:0.72rem" onclick="doReinstate(${i})">↩ Reinstate</button>`
+              : `<button class="btn btn-danger" style="padding:4px 10px;font-size:0.72rem" onclick="doAbsent(${i})">⚠️ Absent</button>`}
+            <button class="btn btn-danger" style="padding:4px 10px;font-size:0.72rem" onclick="doRemoveJudge(${i})">✕</button>
+          </td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>`;
+  }
+
+  // Render table assignments
+  const tbody = document.getElementById('table-assignments-tbody');
+  if (!tbody) return;
+  const numbered = teams.filter(t => t.tableNum).sort((a,b) => a.tableNum - b.tableNum);
+  if (!numbered.length) {
+    tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">🗂️</div><p>No table numbers assigned yet.</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = numbered.map(t => {
+    const assignedJudges = judges.filter(j => j.tableIds.some(tid => String(tid) === String(t.id)));
+    const judgeNames = assignedJudges.length
+      ? assignedJudges.map(j => `<span class="badge ${j.absent ? 'badge-health' : 'badge-scored'}">${j.name}${j.absent ? ' (absent)' : ''}</span>`).join(' ')
+      : '<span style="color:var(--muted);font-size:0.8rem">Unassigned</span>';
+    const badges = t.tracks.map(trackBadge).join('') || '—';
+    return `<tr>
+      <td style="font-family:'DM Mono',monospace;font-weight:600;color:var(--accent)">${t.tableNum}</td>
+      <td style="font-weight:500">${t.project}</td>
+      <td style="color:var(--muted);font-size:0.85rem">${t.submitter}</td>
+      <td>${badges}</td>
+      <td>${judgeNames}</td>
+    </tr>`;
+  }).join('');
 }
 
 // ── RANKINGS ──────────────────────────────────────────────────────────────────
@@ -670,7 +965,8 @@ function renderRankingsList() {
         <td style="font-family:'DM Mono',monospace;color:var(--muted)">${r.n}</td>
         <td style="font-family:'DM Mono',monospace;color:var(--muted)">${ranked.length}</td>
         <td style="font-size:0.82rem;line-height:1.8">${summary}</td>
-        <td><button class="btn btn-danger" style="padding:5px 10px;font-size:0.75rem" onclick="deleteRanking(${i})">✕</button></td>
+        <td><button class="btn btn-secondary" style="padding:5px 10px;font-size:0.75rem" onclick="editRanking(${i})">✏️ Edit</button>
+            <button class="btn btn-danger" style="padding:5px 10px;font-size:0.75rem" onclick="deleteRanking(${i})">✕</button></td>
       </tr>`;
     }).join('')}</tbody>
   </table></div>`;
@@ -746,18 +1042,17 @@ function parseCSVFull(text) {
 function mapTrack(raw) {
   const cleaned = raw.replace(/^Track\s*\d+[:\-]\s*/i, '').trim();
 
-  // Main theme tracks
-  if (/social|sustain|environ/i.test(cleaned))               return 'Social Impact';
-  if (/health|medical|patient|hospital|medi/i.test(cleaned)) return 'Health';
-  if (/educ|learn|school|study|knowledge/i.test(cleaned))    return 'Education';
-  if (/commerc|financ|business|loot|ledger|money/i.test(cleaned)) return 'Commerce';
-
-  // Generic tracks
-  if (/solo/i.test(cleaned))                                 return 'Best Solo Hack';
-  if (/duo/i.test(cleaned))                                  return 'Best Duo Hack';
-  if (/ui.?ux|design|interface/i.test(cleaned))              return 'Best UI/UX';
+  if (/social|sustain|environ|alchemy|earth/i.test(cleaned))         return 'Social Impact';
+  if (/health|medical|patient|hospital|elixir|vital/i.test(cleaned)) return 'Health';
+  if (/educ|learn|school|study|scholar|spellbook/i.test(cleaned))    return 'Education';
+  if (/commerc|financ|business|enchanted|shop|ecomm/i.test(cleaned)) return 'Commerce';
+  if (/wildcard|wild.card|rogue|ritual|anomal/i.test(cleaned))       return 'Wildcard';
+  if (/beginner|first.time|starter/i.test(cleaned))                  return 'Best Beginner Hack';
+  if (/solo/i.test(cleaned))                                          return 'Best Solo Hack';
+  if (/duo/i.test(cleaned))                                           return 'Best Duo Hack';
+  if (/ui.?ux|design|interface/i.test(cleaned))                      return 'Best UI/UX';
   if (/\bai\b|\bml\b|machine.?learn|gemini|gpt|llm/i.test(cleaned)) return 'Best AI/ML';
-  if (/mobile|ios|android/i.test(cleaned))                   return 'Best Mobile App';
+  if (/mobile|ios|android/i.test(cleaned))                           return 'Best Mobile App';
 
   return null;
 }
@@ -772,45 +1067,78 @@ function parseDevpostCSV() {
   const headers = rows[0].map(h => h.trim().toLowerCase());
   const col = (...names) => names.reduce((f,n) => f!==-1 ? f : headers.findIndex(h => h.includes(n)), -1);
 
-  const titleIdx  = col('project title', 'title');
-  const trackIdx  = col('please select a track', 'select a track');
-  const prizesIdx = col('opt-in prizes', 'prizes');
-  const firstIdx  = col('submitter first name', 'first name');
-  const lastIdx   = col('submitter last name', 'last name');
-  const sizeIdx   = col('how many people', 'team size', 'members');
+  const titleIdx    = col('project title', 'title');
+  const tableIdx    = col('table number', 'table #', 'table num');
+  // 2026 format has separate columns; 2025 lumps everything into opt-in prizes
+  const mainTrackIdx    = col('please select a main track', 'select a main track', 'please select a track', 'select a track');
+  const sponsorTrackIdx = col('select a sponsor track', 'sponsor track');
+  const sideTrackIdx    = col('select a side track', 'side track');
+  const prizesIdx       = col('opt-in prizes', 'prizes'); // 2025 fallback
+  const firstIdx    = col('submitter first name', 'first name');
+  const lastIdx     = col('submitter last name', 'last name');
+  const sizeIdx     = col('how many people', 'team size', 'members');
 
   if (titleIdx === -1) return alert('Could not find "Project Title" column. Is this a Devpost CSV?');
 
-  // Only skip truly empty entries — real projects like "asdf" and "Test" are kept
   const SKIP = new Set(['']);
   const added = [];
+  const conflicts = [];
 
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
     const title = (r[titleIdx] || '').trim();
     if (!title || SKIP.has(title.toLowerCase())) continue;
 
-    const rawTrack  = (r[trackIdx]  || '').trim();
-    const rawPrizes = (r[prizesIdx] || '').trim();
-    const first     = (r[firstIdx]  || '').trim();
-    const last      = (r[lastIdx]   || '').trim();
-    const size      = parseInt(r[sizeIdx] || '0') || 0;
+    const rawMain    = (r[mainTrackIdx]    || '').trim();
+    const rawSponsor = sponsorTrackIdx !== -1 ? (r[sponsorTrackIdx] || '').trim() : '';
+    const rawSide    = sideTrackIdx    !== -1 ? (r[sideTrackIdx]    || '').trim() : '';
+    const rawPrizes  = (r[prizesIdx]       || '').trim(); // 2025 fallback
+    const first      = (r[firstIdx]        || '').trim();
+    const last       = (r[lastIdx]         || '').trim();
+    const size       = parseInt(r[sizeIdx] || '0') || 0;
+    const tableNum   = tableIdx !== -1 ? (parseInt(r[tableIdx]) || null) : null;
 
     const tset = new Set();
-    const p1 = mapTrack(rawTrack); if (p1) tset.add(p1);
-    if (rawPrizes) rawPrizes.split(',').forEach(p => {
-      p = p.trim();
-      if (p.toUpperCase().startsWith('MLH')) return;
-      const m = mapTrack(p); if (m) tset.add(m);
+
+    // Main track
+    const m1 = mapTrack(rawMain); if (m1) tset.add(m1);
+
+    // Sponsor tracks (2026 separate column)
+    if (rawSponsor) rawSponsor.split(',').forEach(p => {
+      const m = mapTrack(p.trim()); if (m) tset.add(m);
     });
-    if (size === 1) tset.add('Best Solo Hack');
-    else if (size === 2) tset.add('Best Duo Hack');
+
+    // Side tracks (2026 separate column)
+    if (rawSide) rawSide.split(',').forEach(p => {
+      const m = mapTrack(p.trim()); if (m) tset.add(m);
+    });
+
+    // 2025 fallback: opt-in prizes column has everything
+    if (rawPrizes && !rawSponsor && !rawSide) {
+      rawPrizes.split(',').forEach(p => {
+        p = p.trim();
+        if (p.toUpperCase().startsWith('MLH')) return;
+        const m = mapTrack(p); if (m) tset.add(m);
+      });
+    }
+
+    // Auto-infer solo/duo from team size if not already set
+    if (size === 1 && !tset.has('Best Solo Hack')) tset.add('Best Solo Hack');
+    else if (size === 2 && !tset.has('Best Duo Hack')) tset.add('Best Duo Hack');
+
+    // Flag solo+duo conflict
+    const hasSolo = tset.has('Best Solo Hack');
+    const hasDuo  = tset.has('Best Duo Hack');
+    const conflict = hasSolo && hasDuo;
+    if (conflict) conflicts.push(title);
 
     added.push({
       id: Date.now() + i,
       project: title,
       submitter: [first, last].filter(Boolean).join(' ') || 'Unknown',
       tracks: [...tset],
+      tableNum,
+      conflict: conflict || undefined, // flag for display
     });
   }
 
@@ -819,11 +1147,18 @@ function parseDevpostCSV() {
   teams = added;
   scores = {};
   rankings = [];
+
+  // Auto-use table numbers from CSV if present
+  const hasTableNums = added.some(t => t.tableNum);
+
   persist();
   renderTeamsTable(); updateProjectSelect(); updateStats();
-  alert('✅ Imported ' + added.length + ' projects!');
-}
 
+  let msg = '✅ Imported ' + added.length + ' projects!';
+  if (hasTableNums) msg += '\n📋 Table numbers imported from CSV.';
+  if (conflicts.length) msg += '\n\n⚠️ Solo+Duo conflict detected on ' + conflicts.length + ' project(s):\n' + conflicts.join('\n') + '\n\nThese teams are flagged in red — remove them from one track manually.';
+  alert(msg);
+}
 // ── MANUAL ADD ────────────────────────────────────────────────────────────────
 function addManualTeam() {
   const project   = document.getElementById('manual-project').value.trim();
@@ -860,9 +1195,79 @@ function doRemoveTeam(idx) {
 }
 window.doRemoveTeam = doRemoveTeam;
 
+// ── EDIT TEAM ─────────────────────────────────────────────────────────────────
+window.doEditTeam = function(idx) {
+  idx = parseInt(idx);
+  if (isNaN(idx) || idx < 0 || idx >= teams.length) return;
+  const t = teams[idx];
+
+  const allTracks = [
+    'Social Impact','Health','Education','Commerce','Wildcard',
+    'Best Solo Hack','Best Duo Hack','Best Beginner Hack',
+    'Best AI/ML','Best UI/UX','Best Mobile App'
+  ];
+
+  const trackCheckboxes = allTracks.map(tr => {
+    const checked = t.tracks.includes(tr) ? 'checked' : '';
+    return `<label style="display:flex;align-items:center;gap:6px;font-size:0.82rem;margin-bottom:4px;cursor:pointer">
+      <input type="checkbox" value="${tr}" ${checked} style="accent-color:var(--accent)"> ${tr}
+    </label>`;
+  }).join('');
+
+  // Create modal overlay
+  const modal = document.createElement('div');
+  modal.id = 'edit-team-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:28px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.8)">
+      <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:1.1rem;margin-bottom:20px;color:var(--text)">✏️ Edit Team</div>
+      <div class="form-group">
+        <label>Project Name</label>
+        <input type="text" id="edit-project" value="${t.project}" style="width:100%">
+      </div>
+      <div class="form-group">
+        <label>Submitter</label>
+        <input type="text" id="edit-submitter" value="${t.submitter}" style="width:100%">
+      </div>
+      <div class="form-group">
+        <label>Table Number</label>
+        <input type="number" id="edit-table" value="${t.tableNum||''}" style="width:80px">
+      </div>
+      <div class="form-group">
+        <label style="margin-bottom:8px;display:block">Tracks</label>
+        <div id="edit-track-checks" style="display:grid;grid-template-columns:1fr 1fr;gap:2px">${trackCheckboxes}</div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end">
+        <button class="btn btn-secondary" onclick="document.getElementById('edit-team-modal').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveEditTeam(${idx})">💾 Save Changes</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+};
+
+window.saveEditTeam = function(idx) {
+  idx = parseInt(idx);
+  const project   = document.getElementById('edit-project').value.trim();
+  const submitter = document.getElementById('edit-submitter').value.trim();
+  const tableNum  = parseInt(document.getElementById('edit-table').value) || null;
+  const tracks    = Array.from(document.querySelectorAll('#edit-track-checks input:checked')).map(c => c.value);
+
+  if (!project) return alert('Project name cannot be empty.');
+
+  const hasSolo = tracks.includes('Best Solo Hack');
+  const hasDuo  = tracks.includes('Best Duo Hack');
+  const conflict = hasSolo && hasDuo;
+
+  teams[idx] = { ...teams[idx], project, submitter: submitter||'Unknown', tableNum, tracks, conflict: conflict||undefined };
+  persist(); renderTeamsTable(); refreshJudgesTab();
+  document.getElementById('edit-team-modal').remove();
+  if (conflict) alert('⚠️ This team still has both Solo and Duo hack selected — please remove one.');
+};
+
 function clearAllTeams() {
-  if (!confirm('Clear ALL teams, scores, and rankings? Cannot be undone.')) return;
-  teams = []; scores = {}; rankings = [];
+  if (!confirm('Clear ALL teams, scores, rankings, and judge assignments? Cannot be undone.')) return;
+  teams = []; scores = {}; rankings = []; judges = [];
   persist();
   renderTeamsTable(); updateProjectSelect(); updateStats();
   document.getElementById('autosave-msg').textContent = '🔄 clearing...';
@@ -879,10 +1284,9 @@ function renderTeamsTable() {
   const tbody = document.getElementById('teams-tbody');
   document.getElementById('team-count').textContent = `(${teams.length})`;
   if (!teams.length) {
-    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📂</div><p>No teams imported yet.</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📂</div><p>No teams imported yet.</p></div></td></tr>';
     return;
   }
-  // Build a map of how many judges ranked each team
   const rankCountMap = {};
   rankings.forEach(r => {
     Object.keys(r.ranks || {}).forEach(tid => {
@@ -896,172 +1300,30 @@ function renderTeamsTable() {
       ? `<span class="badge badge-scored">✓ ${jc} judge${jc>1?'s':''} ranked</span>`
       : `<span class="badge badge-unscored">Pending</span>`;
     const badges = t.tracks.map(trackBadge).join('') || '<span style="color:var(--muted);font-size:0.8rem">—</span>';
-    return `<tr>
-      <td style="color:var(--muted);font-family:'DM Mono',monospace">${i+1}</td>
+    const conflictFlag = t.conflict
+      ? `<span class="badge badge-health" title="This team selected both Solo and Duo hack — remove one manually">⚠️ Solo+Duo conflict</span>`
+      : '';
+    const rowStyle = t.conflict ? 'background:rgba(255,101,132,0.06)' : '';
+    return `<tr style="${rowStyle}">
+      <td><input type="number" min="1" value="${t.tableNum||''}" placeholder="—"
+        style="width:60px;font-family:'DM Mono',monospace;text-align:center;padding:4px 6px;font-size:0.82rem;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text)"
+        onchange="setTableNum(${i}, this.value)"></td>
       <td style="font-weight:500">${t.project}</td>
-      <td style="color:var(--muted)">${t.submitter}</td>
-      <td>${badges}</td>
+      <td style="color:var(--muted);font-size:0.82rem">${t.submitter}</td>
+      <td>${badges} ${conflictFlag}</td>
       <td>${status}</td>
-      <td><button class="btn btn-danger" style="padding:6px 12px;font-size:0.78rem" onclick="doRemoveTeam(${i})">✕</button></td>
+      <td><button class="btn btn-secondary" style="padding:4px 10px;font-size:0.72rem" onclick="doEditTeam(${i})">✏️</button></td>
+      <td><button class="btn btn-danger" style="padding:4px 10px;font-size:0.72rem" onclick="doRemoveTeam(${i})">✕</button></td>
     </tr>`;
   }).join('');
 }
 
-// ── PROJECT SELECT ────────────────────────────────────────────────────────────
-function updateProjectSelect() {
-  const sel = document.getElementById('project-select');
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">— Select a project —</option>' +
-    teams.map(t => `<option value="${t.id}">${t.project}</option>`).join('');
-  if (cur) sel.value = cur;
+function setTableNum(idx, val) {
+  const num = parseInt(val);
+  teams[idx].tableNum = isNaN(num) ? null : num;
+  persist();
 }
-
-// ── SCORE FORM ────────────────────────────────────────────────────────────────
-function loadScoreForm() {
-  const teamId = parseInt(document.getElementById('project-select').value);
-  const area   = document.getElementById('score-form-area');
-  if (!teamId) {
-    area.innerHTML = '<div class="empty-state"><div class="empty-icon">📊</div><p>Select a project to score.</p></div>';
-    return;
-  }
-  const team = teams.find(t => t.id === teamId); if (!team) return;
-  const jname = document.getElementById('judge-name').value.trim() || 'Anonymous';
-  const ex  = scores[teamId]?.[jname] || {};
-  const v   = f => ex[f] ?? '';
-
-  const prevHTML = Object.keys(scores[teamId] || {}).length ? `
-    <div style="margin-top:28px">
-      <div class="section-title" style="font-size:0.9rem">Previous Scores for This Project</div>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Judge</th><th>Idea</th><th>Experience</th><th>Implementation</th><th>Demo</th><th>Total</th><th></th></tr></thead>
-        <tbody>${Object.entries(scores[teamId]).map(([j,sc]) => `<tr>
-          <td style="font-weight:500">${j}</td>
-          <td><span class="score-pill">${sc.idea??'—'}</span></td>
-          <td><span class="score-pill">${sc.experience??'—'}</span></td>
-          <td><span class="score-pill">${sc.implementation??'—'}</span></td>
-          <td><span class="score-pill">${sc.demo??'—'}</span></td>
-          <td style="font-family:'DM Mono',monospace;color:var(--accent)">${sc.total??'—'}</td>
-          <td><button class="btn btn-danger" style="padding:5px 10px;font-size:0.75rem" onclick="deleteJudgeScore(${teamId},'${j}')">✕</button></td>
-        </tr>`).join('')}</tbody>
-      </table></div>
-    </div>` : '';
-
-  area.innerHTML = `
-    <div class="total-bar">
-      <div>
-        <div class="total-label">${team.project}</div>
-        <div style="font-size:0.82rem;color:var(--muted);margin-top:2px">${team.submitter}</div>
-        <div style="margin-top:6px">${team.tracks.map(trackBadge).join('') || ''}</div>
-        <div class="progress-bar"><div class="progress-fill" id="total-progress" style="width:${((v('total')||0)/40)*100}%"></div></div>
-      </div>
-      <div style="text-align:right">
-        <div style="font-size:0.75rem;color:var(--muted);margin-bottom:4px">TOTAL SCORE</div>
-        <div class="total-score"><span id="live-total">${v('total')||'—'}</span><span> / 40</span></div>
-      </div>
-    </div>
-
-    <div class="rubric-grid">
-      <div class="rubric-category">
-        <h4>💡 Idea <span class="cat-score" id="cat-idea">—</span></h4>
-        <p>Innovation · Research · Scale</p>
-        <div class="score-field"><label>Innovation — how different from existing solutions? (1–10)</label><input type="number" min="1" max="10" id="f-inn" value="${v('innovation')}" oninput="calcTotal()"></div>
-        <div class="score-field"><label>Research — how well was the need gauged? (1–10)</label><input type="number" min="1" max="10" id="f-res" value="${v('research')}" oninput="calcTotal()"></div>
-        <div class="score-field"><label>Scale — how many people impacted? (1–10)</label><input type="number" min="1" max="10" id="f-scl" value="${v('scale')}" oninput="calcTotal()"></div>
-      </div>
-      <div class="rubric-category">
-        <h4>✨ Experience <span class="cat-score" id="cat-exp">—</span></h4>
-        <p>Usability · Practicality · Impact</p>
-        <div class="score-field"><label>Usability — smooth & intuitive for target audience? (1–10)</label><input type="number" min="1" max="10" id="f-usa" value="${v('usability')}" oninput="calcTotal()"></div>
-        <div class="score-field"><label>Practicality — will anyone actually use this? (1–10)</label><input type="number" min="1" max="10" id="f-pra" value="${v('practicality')}" oninput="calcTotal()"></div>
-        <div class="score-field"><label>Impact — does it solve the real-world problem? (1–10)</label><input type="number" min="1" max="10" id="f-imp" value="${v('impact')}" oninput="calcTotal()"></div>
-      </div>
-      <div class="rubric-category">
-        <h4>⚙️ Implementation <span class="cat-score" id="cat-impl">—</span></h4>
-        <p>Functionality · Adaptability · Technology</p>
-        <div class="score-field"><label>Functionality — does it work as intended? (1–10)</label><input type="number" min="1" max="10" id="f-fun" value="${v('functionality')}" oninput="calcTotal()"></div>
-        <div class="score-field"><label>Adaptability — can it be expanded in the future? (1–10)</label><input type="number" min="1" max="10" id="f-ada" value="${v('adaptability')}" oninput="calcTotal()"></div>
-        <div class="score-field"><label>Technology — technically impressive or novel? (1–10)</label><input type="number" min="1" max="10" id="f-tec" value="${v('technology')}" oninput="calcTotal()"></div>
-      </div>
-      <div class="rubric-category">
-        <h4>🎤 Demo <span class="cat-score" id="cat-demo">—</span></h4>
-        <p>Clarity and presentation of the 2-minute pitch.</p>
-        <div class="score-field"><label>Demo Score (1–10)</label><input type="number" min="1" max="10" id="f-dem" value="${v('demo')}" oninput="calcTotal()"></div>
-      </div>
-    </div>
-
-    <div class="btn-row">
-      <button class="btn btn-primary" onclick="saveScores(${teamId})">💾 Save Scores</button>
-      <button class="btn btn-secondary" onclick="clearScoreForm()">✕ Clear</button>
-    </div>
-    ${prevHTML}
-  `;
-  calcTotal();
-}
-
-function gv(id) { const v = parseFloat(document.getElementById(id)?.value); return isNaN(v) ? null : Math.min(10, Math.max(1, v)); }
-
-function calcTotal() {
-  const inn=gv('f-inn'), res=gv('f-res'), scl=gv('f-scl');
-  const usa=gv('f-usa'), pra=gv('f-pra'), imp=gv('f-imp');
-  const fun=gv('f-fun'), ada=gv('f-ada'), tec=gv('f-tec');
-  const dem=gv('f-dem');
-
-  const idea = (inn!==null&&res!==null&&scl!==null) ? +((inn+res+scl)/3).toFixed(1) : null;
-  const exp  = (usa!==null&&pra!==null&&imp!==null) ? +((usa+pra+imp)/3).toFixed(1) : null;
-  const impl = (fun!==null&&ada!==null&&tec!==null) ? +((fun+ada+tec)/3).toFixed(1) : null;
-
-  const set = (id, val) => { const el=document.getElementById(id); if(el) el.textContent=val!==null?val:'—'; };
-  set('cat-idea',idea); set('cat-exp',exp); set('cat-impl',impl); set('cat-demo',dem);
-
-  if (idea!==null&&exp!==null&&impl!==null&&dem!==null) {
-    const total = +((idea+exp+impl+dem)).toFixed(1);
-    set('live-total', total);
-    const p = document.getElementById('total-progress'); if(p) p.style.width=(total/40*100)+'%';
-  } else { set('live-total','—'); }
-
-  return {inn,res,scl,usa,pra,imp,fun,ada,tec,dem,idea,exp,impl};
-}
-
-function saveScores(teamId) {
-  teamId = Number(teamId);
-  const jname = document.getElementById('judge-name').value.trim() || 'Anonymous';
-  const c = calcTotal();
-  if ([c.inn,c.res,c.scl,c.usa,c.pra,c.imp,c.fun,c.ada,c.tec,c.dem].some(v=>v===null))
-    return alert('Please fill in all 10 score fields before saving.');
-  const total = +((c.idea+c.exp+c.impl+c.dem)).toFixed(1);
-  if (!scores[teamId]) scores[teamId] = {};
-  scores[teamId][jname] = {
-    innovation:c.inn, research:c.res, scale:c.scl,
-    usability:c.usa,  practicality:c.pra, impact:c.imp,
-    functionality:c.fun, adaptability:c.ada, technology:c.tec,
-    demo:c.dem, idea:c.idea, experience:c.exp, implementation:c.impl, total
-  };
-  renderTeamsTable(); updateStats(); persist(); loadScoreForm();
-  alert(`✅ Scores saved for ${jname}!`);
-}
-
-function deleteJudgeScore(teamId, jname) {
-  teamId = Number(teamId);
-  if (!confirm(`Remove scores from ${jname}?`)) return;
-  if (scores[teamId]) delete scores[teamId][jname];
-  renderTeamsTable(); updateStats(); persist(); loadScoreForm();
-}
-
-function clearScoreForm() {
-  ['f-inn','f-res','f-scl','f-usa','f-pra','f-imp','f-fun','f-ada','f-tec','f-dem']
-    .forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
-  calcTotal();
-}
-
-function prevProject() {
-  const sel = document.getElementById('project-select');
-  if (sel.selectedIndex > 1) { sel.selectedIndex--; loadScoreForm(); }
-}
-function nextProject() {
-  const sel = document.getElementById('project-select');
-  if (sel.selectedIndex === 0 && sel.options.length > 1) { sel.selectedIndex=1; loadScoreForm(); }
-  else if (sel.selectedIndex < sel.options.length-1) { sel.selectedIndex++; loadScoreForm(); }
-}
+window.setTableNum = setTableNum;
 
 // ── LEADERBOARD ───────────────────────────────────────────────────────────────
 function getAvg(teamId) {
@@ -1108,8 +1370,8 @@ function refreshLeaderboard() {
 }
 
 // ── TRACKS ────────────────────────────────────────────────────────────────────
-const MAIN_TRACKS  = TRACKS.filter(t => ['Social Impact','Health','Education','Commerce'].includes(t.id));
-const GENERIC_TRACKS = TRACKS.filter(t => !['Social Impact','Health','Education','Commerce'].includes(t.id));
+const MAIN_TRACKS    = TRACKS.filter(t => t.main);
+const GENERIC_TRACKS = TRACKS.filter(t => !t.main);
 
 function refreshTracks() {
   const area = document.getElementById('tracks-content');
@@ -1130,19 +1392,29 @@ function refreshTracks() {
   }
 
   function trackCard(track) {
-    const top = trackTopN(track.id, 3);
-    const [winner, ru1, ru2] = top;
-    return `<div class="track-card">
-      <div class="track-name">${track.icon} ${track.label}</div>
+    const top = trackTopN(track.id, 10); // get top 10
+    const [winner, ru1, ru2, ...rest] = top;
+    const expandId = 'track-expand-' + track.id.replace(/[^a-z0-9]/gi,'_');
+    const fullList = top.map((t, i) => {
+      const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}.`;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:0.82rem">
+        <span>${medal} <span style="color:var(--text)">${t.project}</span> <span style="color:var(--muted);font-size:0.75rem">· ${t.submitter}</span></span>
+        <span class="score-pill" style="font-size:0.72rem">${t.gs.avg.toFixed(3)}</span>
+      </div>`;
+    }).join('');
+
+    return `<div class="track-card" onclick="toggleTrackExpand('${track.id}')" style="cursor:pointer">
+      <div class="track-name">${track.icon} ${track.label} <span style="float:right;font-size:0.65rem;color:var(--muted)">click to expand ▾</span></div>
       ${winner
         ? `<div class="track-winner">${winner.project}</div>
            <div class="track-score">${winner.submitter} · ${winner.gs.avg.toFixed(3)}</div>
-           ${ru1 ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
-             <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Runner-ups</div>
-             <div style="font-size:0.82rem;color:var(--muted)">🥈 ${ru1.project} <span style="font-family:'DM Mono',monospace;font-size:0.72rem">${ru1.gs.avg.toFixed(3)}</span></div>
-             ${ru2 ? `<div style="font-size:0.82rem;color:var(--muted);margin-top:2px">🥉 ${ru2.project} <span style="font-family:'DM Mono',monospace;font-size:0.72rem">${ru2.gs.avg.toFixed(3)}</span></div>` : ''}
-           </div>` : ''}`
+           ${ru1 ? `<div style="margin-top:6px;font-size:0.82rem;color:var(--muted)">🥈 ${ru1.project} · ${ru1.gs.avg.toFixed(3)}</div>` : ''}
+           ${ru2 ? `<div style="font-size:0.82rem;color:var(--muted)">🥉 ${ru2.project} · ${ru2.gs.avg.toFixed(3)}</div>` : ''}`
         : `<div class="track-winner" style="color:var(--muted);font-size:0.88rem">No eligible ranked teams</div>`}
+      <div id="${expandId}" style="display:none;margin-top:12px;padding-top:12px;border-top:2px solid var(--border)">
+        <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Full Rankings for this Track</div>
+        ${top.length ? fullList : '<div style="color:var(--muted);font-size:0.82rem">No ranked teams</div>'}
+      </div>
     </div>`;
   }
 
@@ -1252,35 +1524,113 @@ function exportResults() {
 }
 
 // ── STATS ─────────────────────────────────────────────────────────────────────
+// stub — project select dropdown removed with tiebreaker tab
+function updateProjectSelect() {}
+
 function updateStats() {
   document.getElementById('stat-teams').textContent = teams.length;
-  const jset = new Set(); let entries = 0;
-  teams.forEach(t => Object.keys(scores[t.id]||{}).forEach(j => { jset.add(j); entries++; }));
-  document.getElementById('stat-scores').textContent = entries;
+  // Count unique judges who have submitted rankings
+  const jset = new Set(rankings.map(r => r.judge));
+  document.getElementById('stat-scores').textContent = rankings.length;
   document.getElementById('stat-judges').textContent = jset.size;
-  const pct = teams.length ? Math.round(teams.filter(t=>Object.keys(scores[t.id]||{}).length>0).length/teams.length*100) : 0;
-  document.getElementById('stat-pct').textContent = pct+'%';
+  // % of teams that have at least one ranking
+  const rankedTeamIds = new Set(rankings.flatMap(r => Object.keys(r.ranks||{})));
+  const pct = teams.length ? Math.round(rankedTeamIds.size / teams.length * 100) : 0;
+  document.getElementById('stat-pct').textContent = pct + '%';
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
-// Start with empty UI, Firebase listener will populate once connected
+const DEFAULT_JUDGES = [
+  "Kulkarni, Shubham","Khurana, Rahul","Srivastava, Kshitij Kumar","Bose, Snigdha",
+  "FNU Lovleen Kaur","Aditya Raj","Jasdeep Singh Bhalla","Khandelwal, Sandeep Kumar",
+  "Lazor, Yaroslav","Bagmar, Vivek","Vasu Raj Jain","Divyanshu Abhichandani",
+  "Verma, Ishita","Gautham Kanekal Guruswamy","Sharma, Saumitra","Nikhil Singhal",
+  "Tyagi, Shruti","Patel, Dev","Govindaraj, Sowmiya Narayanan","Bamotra, Abhishek",
+  "Gupta, Rajesh","Jing Yao","Gkatzonis, Konstantinos","Sun, Allan",
+  "Prasenjit Sinha","Li, Zhuohan","Aneri Shah","Dawane, Anuja",
+  "Sharaff, Nitu","Charan Shetty Halli Guruswamy","Jaspreet Singh Riar"
+];
+
 renderTeamsTable();
 updateProjectSelect();
 updateStats();
 document.getElementById('autosave-msg').textContent = '🔄 connecting...';
 
-// Start Firebase sync once SDK is ready
-function initFirebase() {
-  startFirebaseSync();
-}
-if (window._dbReady) {
-  initFirebase();
-} else {
-  window.addEventListener('firebase-ready', initFirebase);
-}
+function initFirebase() { startFirebaseSync(); }
+if (window._dbReady) { initFirebase(); }
+else { window.addEventListener('firebase-ready', initFirebase); }
 
-// Wire judge name input on rankings tab to pre-fill existing data
 document.getElementById('rank-judge-name').addEventListener('change', renderRankInputs);
+
+// ── EDIT RANKINGS ─────────────────────────────────────────────────────────────
+function editRanking(idx) {
+  const r = rankings[idx];
+  if (!r) return;
+  document.getElementById('rank-judge-name').value = r.judge;
+  document.getElementById('rank-n').value = r.n;
+  // Switch to rankings tab
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-rankings').classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    if (b.textContent.includes('Rankings')) b.classList.add('active');
+  });
+  renderRankInputs();
+  // Scroll to form
+  document.getElementById('rank-judge-name').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+window.editRanking = editRanking;
+
+// ── VALIDATION / CHECKING SYSTEM ──────────────────────────────────────────────
+function runValidationCheck() {
+  const issues = [];
+
+  // Check 1: teams without table numbers
+  const noTable = teams.filter(t => !t.tableNum);
+  if (noTable.length) issues.push(`⚠️ ${noTable.length} teams have no table number assigned`);
+
+  // Check 2: teams with no judge assigned
+  const assignedTeamIds = new Set(judges.flatMap(j => j.tableIds.map(String)));
+  const noJudge = teams.filter(t => !assignedTeamIds.has(String(t.id)));
+  if (noJudge.length) issues.push(`⚠️ ${noJudge.length} teams have no judge assigned`);
+
+  // Check 3: rankings where projects ranked ≠ N
+  rankings.forEach(r => {
+    const ranked = Object.keys(r.ranks || {}).length;
+    if (ranked !== r.n) issues.push(`⚠️ ${r.judge}: ranked ${ranked} projects but N=${r.n}`);
+  });
+
+  // Check 4: judges with assignments but no rankings submitted
+  const judgesWithRankings = new Set(rankings.map(r => r.judge.toLowerCase()));
+  const assignedJudges = judges.filter(j => j.tableIds.length > 0 && !j.absent);
+  const missingRankings = assignedJudges.filter(j => !judgesWithRankings.has(j.name.toLowerCase()));
+  if (missingRankings.length) issues.push(`⚠️ ${missingRankings.length} judges haven't submitted rankings yet: ${missingRankings.slice(0,3).map(j=>j.name).join(', ')}${missingRankings.length > 3 ? '...' : ''}`);
+
+  // Check 5: teams with fewer than 3 judge rankings
+  const teamRankCounts = {};
+  rankings.forEach(r => Object.keys(r.ranks||{}).forEach(tid => {
+    teamRankCounts[tid] = (teamRankCounts[tid]||0) + 1;
+  }));
+  const underRanked = teams.filter(t => (teamRankCounts[String(t.id)]||0) < 3);
+  if (underRanked.length) issues.push(`⚠️ ${underRanked.length} teams have fewer than 3 judge rankings`);
+
+  const el = document.getElementById('validation-output');
+  if (!el) return;
+  if (!issues.length) {
+    el.innerHTML = '<div style="color:var(--accent3);font-size:0.88rem">✅ All checks passed! Everything looks good.</div>';
+  } else {
+    el.innerHTML = issues.map(i => `<div style="color:var(--gold);font-size:0.85rem;margin-bottom:6px">${i}</div>`).join('');
+  }
+}
+window.runValidationCheck = runValidationCheck;
+
+// ── CLICKABLE TRACK CARDS (expand runner-up list) ─────────────────────────────
+function toggleTrackExpand(trackId) {
+  const el = document.getElementById('track-expand-' + trackId.replace(/[^a-z0-9]/gi,'_'));
+  if (!el) return;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+window.toggleTrackExpand = toggleTrackExpand;
 </script>
 </body>
 </html>
