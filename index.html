@@ -371,6 +371,7 @@
     <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
       <button class="btn btn-primary" onclick="autoAssignJudges()">🎲 Auto-Assign Tables to Judges</button>
       <button class="btn btn-success" onclick="exportJudgeAssignments()">↓ Export Assignments CSV</button>
+      <button class="btn btn-danger" onclick="clearAllJudges()">🗑️ Clear All Judges</button>
       <span style="font-size:0.82rem;color:var(--muted)" id="assign-stats"></span>
     </div>
   </div>
@@ -602,6 +603,12 @@ function clearTableNumbers() {
   if (!confirm('Clear all table numbers?')) return;
   teams = teams.map(t => ({ ...t, tableNum: null }));
   persist(); renderTeamsTable(); refreshJudgesTab();
+}
+
+function clearAllJudges() {
+  if (!confirm('Clear ALL judges and their assignments? Cannot be undone.')) return;
+  judges = [];
+  persist(); refreshJudgesTab();
 }
 
 function loadDefaultJudges() {
@@ -1059,10 +1066,10 @@ function mapTrack(raw) {
 
 function parseDevpostCSV() {
   const raw = document.getElementById('csv-input').value.trim();
-  if (!raw) return alert('Please paste CSV content first.');
+  if (!raw) return alert('Please paste or upload a CSV file first.');
 
   const rows = parseCSVFull(raw);
-  if (rows.length < 2) return alert('Could not parse CSV. Make sure you pasted the full content.');
+  if (rows.length < 2) return alert('Could not parse CSV — only ' + rows.length + ' row(s) found. Make sure you uploaded the full file.');
 
   const headers = rows[0].map(h => h.trim().toLowerCase());
   const col = (...names) => names.reduce((f,n) => f!==-1 ? f : headers.findIndex(h => h.includes(n)), -1);
@@ -1177,10 +1184,14 @@ function handleFileUpload(event) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    document.getElementById('csv-input').value = e.target.result;
+    // Strip BOM if present, normalize line endings
+    let text = e.target.result;
+    text = text.replace(/^\uFEFF/, ''); // strip BOM
+    text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n'); // normalize line endings
+    document.getElementById('csv-input').value = text;
     parseDevpostCSV();
   };
-  reader.readAsText(file);
+  reader.readAsText(file, 'UTF-8');
 }
 window.handleFileUpload = handleFileUpload;
 
