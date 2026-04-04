@@ -1008,6 +1008,7 @@ function saveRankings() {
   renderTeamsTable();
   renderRankingsList();
   renderGlobalScores();
+  refreshTracks();
   document.getElementById('rank-judge-name').value = '';
   document.getElementById('rank-n').value = '10';
   renderRankInputs();
@@ -1020,6 +1021,7 @@ function deleteRanking(idx) {
   persist();
   renderRankingsList();
   renderGlobalScores();
+  refreshTracks();
 }
 window.deleteRanking = deleteRanking;
 
@@ -1058,8 +1060,10 @@ function calcGlobalScores() {
   // For each team, collect all normalized scores from each judge who ranked them
   const teamScores = {}; // teamId -> [normalizedScore, ...]
   rankings.forEach(r => {
-    Object.entries(r.ranks).forEach(([tid, rank]) => {
-      const normalized = (r.n - rank) / (r.n - 1);
+    const n = r.n || 10;
+    const denom = n <= 1 ? 1 : n - 1;
+    Object.entries(r.ranks || {}).forEach(([tid, rank]) => {
+      const normalized = (n - rank) / denom;
       if (!teamScores[tid]) teamScores[tid] = [];
       teamScores[tid].push(normalized);
     });
@@ -1546,43 +1550,72 @@ function refreshLeaderboard() {
 const MAIN_TRACKS    = TRACKS.filter(t => t.main);
 const GENERIC_TRACKS = TRACKS.filter(t => !t.main);
 
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function toggleTrackExpandByDomId(domId) {
+  const el = document.getElementById(domId);
+  if (!el) return;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+window.toggleTrackExpandByDomId = toggleTrackExpandByDomId;
+
 function refreshTracks() {
   const area = document.getElementById('tracks-content');
-  if (!teams.length) { area.innerHTML='<div class="empty-state"><div class="empty-icon">🎯</div><p>No data yet.</p></div>'; return; }
+  if (!area) return;
+  if (!teams.length) {
+    area.innerHTML = '<div class="empty-state"><div class="empty-icon">🎯</div><p>No data yet.</p></div>';
+    return;
+  }
 
+  try {
   const globalResults = calcGlobalScores();
   const globalMap = {};
   globalResults.forEach(r => { globalMap[String(r.tid)] = r; });
 
-  // Helper: get top N teams in a track by global score
+  const trackTags = t => (Array.isArray(t.tracks) ? t.tracks : []);
+  function teamEligibleForTrack(t, trackId) {
+    const tr = trackTags(t);
+    if (tr.includes(trackId)) return true;
+    if (!tr.length && trackId === 'Wildcard') return true;
+    return false;
+  }
+
   function trackTopN(trackId, n = 3) {
     return teams
-      .filter(t => t.tracks.includes(trackId))
+      .filter(t => teamEligibleForTrack(t, trackId))
       .map(t => ({ ...t, gs: globalMap[String(t.id)] }))
-      .filter(t => t.gs)
+      .filter(t => t.gs && typeof t.gs.avg === 'number' && !Number.isNaN(t.gs.avg))
       .sort((a,b) => b.gs.avg - a.gs.avg)
       .slice(0, n);
   }
 
   function trackCard(track) {
-    const top = trackTopN(track.id, 10); // get top 10
+    const top = trackTopN(track.id, 10);
     const [winner, ru1, ru2, ...rest] = top;
-    const expandId = 'track-expand-' + track.id.replace(/[^a-z0-9]/gi,'_');
+    const expandId = 'track-expand-' + track.id.replace(/[^a-z0-9]/gi, '_');
     const fullList = top.map((t, i) => {
       const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}.`;
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:0.82rem">
-        <span>${medal} <span style="color:var(--text)">${t.project}</span> <span style="color:var(--muted);font-size:0.75rem">· ${t.submitter}</span></span>
+        <span>${medal} <span style="color:var(--text)">${escapeHtml(t.project)}</span> <span style="color:var(--muted);font-size:0.75rem">· ${escapeHtml(t.submitter)}</span></span>
         <span class="score-pill" style="font-size:0.72rem">${t.gs.avg.toFixed(3)}</span>
       </div>`;
     }).join('');
 
-    return `<div class="track-card" onclick="toggleTrackExpand('${track.id}')" style="cursor:pointer">
-      <div class="track-name">${track.icon} ${track.label} <span style="float:right;font-size:0.65rem;color:var(--muted)">click to expand ▾</span></div>
+    const toggleFn = `toggleTrackExpandByDomId('${expandId}')`;
+    return `<div class="track-card" onclick="${toggleFn}" style="cursor:pointer">
+      <div class="track-name">${track.icon} ${escapeHtml(track.label)} <span style="float:right;font-size:0.65rem;color:var(--muted)">click to expand ▾</span></div>
       ${winner
-        ? `<div class="track-winner">${winner.project}</div>
-           <div class="track-score">${winner.submitter} · ${winner.gs.avg.toFixed(3)}</div>
-           ${ru1 ? `<div style="margin-top:6px;font-size:0.82rem;color:var(--muted)">🥈 ${ru1.project} · ${ru1.gs.avg.toFixed(3)}</div>` : ''}
-           ${ru2 ? `<div style="font-size:0.82rem;color:var(--muted)">🥉 ${ru2.project} · ${ru2.gs.avg.toFixed(3)}</div>` : ''}`
+        ? `<div class="track-winner">${escapeHtml(winner.project)}</div>
+           <div class="track-score">${escapeHtml(winner.submitter)} · ${winner.gs.avg.toFixed(3)}</div>
+           ${ru1 ? `<div style="margin-top:6px;font-size:0.82rem;color:var(--muted)">🥈 ${escapeHtml(ru1.project)} · ${ru1.gs.avg.toFixed(3)}</div>` : ''}
+           ${ru2 ? `<div style="margin-top:6px;font-size:0.82rem;color:var(--muted)">🥉 ${escapeHtml(ru2.project)} · ${ru2.gs.avg.toFixed(3)}</div>` : ''}`
         : `<div class="track-winner" style="color:var(--muted);font-size:0.88rem">No eligible ranked teams</div>`}
       <div id="${expandId}" style="display:none;margin-top:12px;padding-top:12px;border-top:2px solid var(--border)">
         <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Full Rankings for this Track</div>
@@ -1591,16 +1624,27 @@ function refreshTracks() {
     </div>`;
   }
 
+  const rankedButNoTrack = teams.filter(t => globalMap[String(t.id)] && !trackTags(t).length);
+  let html = '';
+  if (!globalResults.length) {
+    const anyRanks = rankings.some(r => r.ranks && Object.keys(r.ranks).length);
+    html += anyRanks
+      ? `<div class="notice" style="margin-bottom:16px"><strong>Track tab:</strong> Rankings are saved but no global scores were computed. Check that each judge&apos;s <strong>Projects seen (N)</strong> is at least <strong>2</strong> (N=1 breaks the score formula).</div>`
+      : `<div class="notice" style="margin-bottom:16px"><strong>Track tab:</strong> Enter and save judge rankings on tab ③ first — winners are derived from those rankings.</div>`;
+  } else if (rankedButNoTrack.length) {
+    html += `<div class="notice" style="margin-bottom:16px"><strong>${rankedButNoTrack.length} ranked project(s)</strong> have <strong>no track tags</strong> from the CSV (or tracks were cleared). They are listed under <strong>Wildcard</strong> only until you edit the team and assign tracks on tab ①.</div>`;
+  }
+
   // Overall top 5 (with runner-ups)
-  let html = '<div class="section-title" style="margin-bottom:16px">🏆 Overall Winners</div>';
+  html += '<div class="section-title" style="margin-bottom:16px">🏆 Overall Winners</div>';
   html += '<div class="tracks-grid" style="margin-bottom:28px">';
   const medals = ['🥇 1st Place','🥈 2nd Place','🥉 3rd Place','4th Place','5th Place'];
   medals.forEach((lbl,i) => {
     const r = globalResults[i];
     html += `<div class="track-card" style="${i >= 3 ? 'opacity:0.7' : ''}">
-      <div class="track-name">${lbl}</div>
-      ${r ? `<div class="track-winner">${r.team ? r.team.project : '?'}</div>
-             <div class="track-score">${r.team ? r.team.submitter : ''} · ${r.avg.toFixed(3)}</div>`
+      <div class="track-name">${escapeHtml(lbl)}</div>
+      ${r ? `<div class="track-winner">${r.team ? escapeHtml(r.team.project) : '?'}</div>
+             <div class="track-score">${r.team ? escapeHtml(r.team.submitter) : ''} · ${r.avg.toFixed(3)}</div>`
           : `<div class="track-winner" style="color:var(--muted)">TBD</div>`}
     </div>`;
   });
@@ -1635,7 +1679,7 @@ function refreshTracks() {
         <label>Winning Project</label>
         <select id="sponsor-project">
           <option value="">— Select project —</option>
-          ${teams.map(t => `<option value="${t.id}">${t.project}</option>`).join('')}
+          ${teams.map(t => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.project)}</option>`).join('')}
         </select>
       </div>
       <button class="btn btn-primary" onclick="addSponsorAward()" style="white-space:nowrap">Add Award</button>
@@ -1646,9 +1690,9 @@ function refreshTracks() {
     html += '<div class="tracks-grid">';
     sponsorAwards.forEach((sa, i) => {
       html += `<div class="track-card">
-        <div class="track-name">🏢 ${sa.sponsor}</div>
-        <div style="font-size:0.75rem;color:var(--muted);margin-bottom:6px">${sa.award}</div>
-        <div class="track-winner">${sa.project}</div>
+        <div class="track-name">🏢 ${escapeHtml(sa.sponsor)}</div>
+        <div style="font-size:0.75rem;color:var(--muted);margin-bottom:6px">${escapeHtml(sa.award)}</div>
+        <div class="track-winner">${escapeHtml(sa.project)}</div>
         <button class="btn btn-danger" style="padding:4px 10px;font-size:0.72rem;margin-top:10px" onclick="deleteSponsorAward(${i})">✕ Remove</button>
       </div>`;
     });
@@ -1658,6 +1702,10 @@ function refreshTracks() {
   }
 
   area.innerHTML = html;
+  } catch (err) {
+    console.error('refreshTracks:', err);
+    area.innerHTML = `<div class="notice" style="border-color:var(--accent2)"><strong>Track tab error:</strong> ${escapeHtml(err.message || err)}<br><br>Open the browser console (F12) for details. This is a bug — not intentional.</div>`;
+  }
 }
 
 function addSponsorAward() {
