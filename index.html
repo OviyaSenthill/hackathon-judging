@@ -524,38 +524,84 @@ const TRACKS = [
 const TMAP = {}; TRACKS.forEach(t => TMAP[t.id] = t);
 
 // ── FIREBASE SYNC ─────────────────────────────────────────────────────────────
-let _syncing = false;
+let _fbConnected = false;
+let _lastSavedAt = null;
+let _ignoreNextSync = false;
 
 function persist() {
-  if (!window._fbSet) return;
-  window._fbSet('judging', { teams, scores, rankings, sponsorAwards, judges }).catch(e => console.error('Firebase write error:', e));
+  if (!window._fbSet) {
+    // Firebase not ready — save to localStorage as fallback
+    try {
+      localStorage.setItem('dh26_teams',    JSON.stringify(teams));
+      localStorage.setItem('dh26_scores',   JSON.stringify(scores));
+      localStorage.setItem('dh26_rankings', JSON.stringify(rankings));
+      localStorage.setItem('dh26_sponsors', JSON.stringify(sponsorAwards));
+      localStorage.setItem('dh26_judges',   JSON.stringify(judges));
+    } catch(e) {}
+    const el = document.getElementById('autosave-msg');
+    if (el) el.textContent = '💾 saved locally';
+    renderTeamsTable(); updateStats();
+    return;
+  }
+  _ignoreNextSync = true; // our own write — don't overwrite local state when listener fires
+  window._fbSet('judging', { teams, scores, rankings, sponsorAwards, judges })
+    .catch(e => console.error('Firebase write error:', e));
   const el = document.getElementById('autosave-msg');
   if (el) el.textContent = '🔄 syncing...';
 }
 
 function startFirebaseSync() {
   window._fbOn('judging', val => {
-    if (!val) {
-      // Empty database — seed with default judges
-      judges = DEFAULT_JUDGES.map((name, i) => ({ id: Date.now() + i, name, email: '', tableIds: [] }));
-      persist();
-      return;
-    }
     const toArray = v => {
       if (!v) return [];
       if (Array.isArray(v)) return v.filter(Boolean);
       return Object.values(v).filter(Boolean);
     };
-    teams         = toArray(val.teams).map(t => ({ ...t, tracks: toArray(t.tracks) }));
-    scores        = val.scores  || {};
-    rankings      = toArray(val.rankings).map(r => ({ ...r, ranks: r.ranks || {}, rubric: r.rubric || {} }));
-    sponsorAwards = toArray(val.sponsorAwards);
-    judges        = toArray(val.judges).map(j => ({ ...j, tableIds: toArray(j.tableIds) }));
 
-    // If judges list is empty (first time or cleared), seed with defaults
-    if (!judges.length) {
-      judges = DEFAULT_JUDGES.map((name, i) => ({ id: Date.now() + i, name, email: '', tableIds: [] }));
-      persist();
+    if (!val) {
+      // Empty database — first time setup
+      // Only seed judges if we don't already have local data
+      if (!judges.length) {
+        judges = DEFAULT_JUDGES.map((name, i) => ({ id: Date.now() + i, name, email: '', tableIds: [] }));
+      }
+      // Write whatever local state we have (could have just been set by CSV parse)
+      if (teams.length || judges.length) {
+        window._fbSet('judging', { teams, scores, rankings, sponsorAwards, judges })
+          .catch(e => console.error(e));
+      }
+      _fbConnected = true;
+      const el = document.getElementById('autosave-msg');
+      if (el) el.textContent = '✅ connected';
+      renderTeamsTable(); updateStats(); refreshJudgesTab();
+      return;
+    }
+
+    // Firebase has data — only overwrite local state if this is the initial load
+    // (not a response to our own persist() call)
+    if (!_fbConnected) {
+      // First load — take Firebase data
+      teams         = toArray(val.teams).map(t => ({ ...t, tracks: toArray(t.tracks) }));
+      scores        = val.scores  || {};
+      rankings      = toArray(val.rankings).map(r => ({ ...r, ranks: r.ranks || {}, rubric: r.rubric || {} }));
+      sponsorAwards = toArray(val.sponsorAwards);
+      judges        = toArray(val.judges).map(j => ({ ...j, tableIds: toArray(j.tableIds) }));
+      if (!judges.length) {
+        judges = DEFAULT_JUDGES.map((name, i) => ({ id: Date.now() + i, name, email: '', tableIds: [] }));
+        window._fbSet('judging', { teams, scores, rankings, sponsorAwards, judges }).catch(e => {});
+      }
+      _fbConnected = true;
+    } else {
+      // Subsequent updates — only take Firebase if it wasn't triggered by our own persist()
+      if (_ignoreNextSync) {
+        _ignoreNextSync = false; // reset flag, skip this update
+      } else {
+        // Another user changed something — take their data
+        teams         = toArray(val.teams).map(t => ({ ...t, tracks: toArray(t.tracks) }));
+        scores        = val.scores  || {};
+        rankings      = toArray(val.rankings).map(r => ({ ...r, ranks: r.ranks || {}, rubric: r.rubric || {} }));
+        sponsorAwards = toArray(val.sponsorAwards);
+        judges        = toArray(val.judges).map(j => ({ ...j, tableIds: toArray(j.tableIds) }));
+      }
     }
 
     setTimeout(() => {
@@ -880,7 +926,6 @@ function highlightDuplicateRanks() {
 }
 
 // Track last known Firebase version for conflict detection
-let _lastSavedAt = null;
 
 function saveRankings() {
   const judgeName = document.getElementById('rank-judge-name').value.trim();
