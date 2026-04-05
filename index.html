@@ -545,8 +545,7 @@ function getRowLabel(tableNum) {
   const n = Number(tableNum);
   if (!Number.isFinite(n) || n < 1) return '';
   const start = Math.floor((n - 1) / 10) * 10 + 1;
-  const end = start + 9;
-  return `<span style="font-size:0.68rem;color:var(--muted);margin-left:8px;white-space:nowrap">(${start}–${end})</span>`;
+  return `<span style="font-size:0.68rem;color:var(--muted);margin-left:6px;white-space:nowrap">(${start}–${start + 9})</span>`;
 }
 
 // ── FIREBASE SYNC ─────────────────────────────────────────────────────────────
@@ -839,9 +838,10 @@ function autoAssignJudges() {
   judges = judges.map(j => ({ ...j, tableIds: [] }));
 
   const mcaList = assignable.filter(isMCACornerTeam);
-  const others = fisherYatesShuffle(assignable.filter(t => !isMCACornerTeam(t)));
+  const numbered = assignable.filter(t => !isMCACornerTeam(t));
+  const shuffled = fisherYatesShuffle(numbered);
 
-  others.forEach((team, i) => {
+  shuffled.forEach((team, i) => {
     judges[i % judges.length].tableIds.push(team.id);
   });
 
@@ -925,9 +925,12 @@ function compareAssignmentTableLabels(a, b) {
   return 0;
 }
 
+/** Labels for CSV/print/judges tab: comma-separated, sorted (numeric table #s ascending; Corner MCA after numbers). */
 function judgeAssignedTableLabels(judge) {
   const labels = judge.tableIds.map(tid => {
     const t = teams.find(tm => String(tm.id) === String(tid));
+    if (!t) return '?';
+    // Prefer human-readable label (table # or Corner CSE Room for MCA); plain tableNum||'?' would hide Corner.
     return assignmentTableLabelForTeam(t);
   });
   labels.sort(compareAssignmentTableLabels);
@@ -997,8 +1000,8 @@ function printJudgeAssignmentSheet() {
     window.focus();
     window.print();
   }
-  if (document.readyState === 'complete') setTimeout(doPrint, 100);
-  else window.addEventListener('load', function() { setTimeout(doPrint, 100); });
+  if (document.readyState === 'complete') setTimeout(doPrint, 120);
+  else window.addEventListener('load', function() { setTimeout(doPrint, 120); });
 })();
 <\/script>
 </body></html>`;
