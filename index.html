@@ -418,7 +418,7 @@
 <div class="panel" id="panel-rankings">
   <div class="section-title">Judge Rankings</div>
   <div class="notice">
-    Each judge ranks all 10 projects they saw from <strong>1 (best) to 10 (worst)</strong>. Enter their rankings here and the dashboard calculates a normalized global score using <strong>(N − Rank) / (N − 1)</strong>, then averages across all judges to find the overall winners.
+    <strong>Projects seen (N)</strong> is the most projects this judge saw (max rank value). Enter ranks <strong>1 (best)</strong> through <strong>N (worst)</strong> only for projects they actually scored—you can save a partial list. The dashboard uses <strong>(N − Rank) / (N − 1)</strong> and averages across judges for global scores.
   </div>
 
   <div class="card" style="margin-bottom:20px">
@@ -970,6 +970,7 @@ function saveRankings() {
   const rubric = {};
   const usedRanks = new Set();
   let hasAny = false;
+  // Partial rankings OK: ≥1 project with a rank; each rank in 1..N; no duplicate rank numbers for this judge.
 
   for (const inp of rankInputs) {
     const v = inp.value.trim();
@@ -1816,10 +1817,22 @@ function runValidationCheck() {
   const noJudge = teams.filter(t => !assignedTeamIds.has(String(t.id)));
   if (noJudge.length) issues.push(`⚠️ ${noJudge.length} teams have no judge assigned`);
 
-  // Check 3: rankings where projects ranked ≠ N
+  // Check 3: too many ranked rows vs N, or rank values outside 1..N
   rankings.forEach(r => {
-    const ranked = Object.keys(r.ranks || {}).length;
-    if (ranked !== r.n) issues.push(`⚠️ ${r.judge}: ranked ${ranked} projects but N=${r.n}`);
+    const n = Number(r.n);
+    const nMax = (Number.isFinite(n) && n >= 1) ? n : 10;
+    const entries = Object.entries(r.ranks || {});
+    const ranked = entries.length;
+    if (ranked > nMax) {
+      issues.push(`⚠️ ${r.judge}: ranked ${ranked} projects but N=${nMax} (cannot rank more than N)`);
+    }
+    const badVals = entries.filter(([, v]) => {
+      const rank = parseInt(v, 10);
+      return isNaN(rank) || rank < 1 || rank > nMax;
+    });
+    if (badVals.length) {
+      issues.push(`⚠️ ${r.judge}: ${badVals.length} rank value(s) out of range (must be integers 1–${nMax})`);
+    }
   });
 
   // Check 4: judges with assignments but no rankings submitted
