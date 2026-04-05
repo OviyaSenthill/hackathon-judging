@@ -409,9 +409,9 @@
       <button class="btn btn-success" onclick="exportResults()">↓ Export CSV</button>
     </div>
   </div>
-  <div class="notice">Rankings are based on <strong>normalized global scores</strong> from judge rankings using (N − Rank) / (N − 1), averaged across all judges. Enter rankings in the Rankings tab first.</div>
+  <div class="notice">Rankings are based on a points system: Rank 1 = 5 pts, Rank 2 = 4 pts, down to Rank 5 = 1 pt. Totals are summed across all judges. Rubric scores are used for tiebreakers.</div>
   <div id="leaderboard-content">
-    <div class="empty-state"><div class="empty-icon">🏆</div><p>No scores yet. Enter scores to see rankings.</p></div>
+    <div class="empty-state"><div class="empty-icon">🏆</div><p>No points yet. Enter rankings on tab ③ to see the leaderboard.</p></div>
   </div>
 </div>
 
@@ -419,7 +419,7 @@
 <div class="panel" id="panel-rankings">
   <div class="section-title">Judge Rankings</div>
   <div class="notice">
-    <strong>Projects seen (N)</strong> is the most projects this judge saw (max rank value). Enter ranks <strong>1 (best)</strong> through <strong>N (worst)</strong> only for projects they actually scored—you can save a partial list. The dashboard uses <strong>(N − Rank) / (N − 1)</strong> and averages across judges for global scores.
+    Judges rank their top 5 projects. Rank 1 = 5 pts, Rank 2 = 4 pts, Rank 3 = 3 pts, Rank 4 = 2 pts, Rank 5 = 1 pt. Rubric scores (/40) are used as tiebreakers.
   </div>
 
   <div class="card" style="margin-bottom:20px">
@@ -429,10 +429,6 @@
         <div class="form-group">
           <label>Judge Name</label>
           <input type="text" id="rank-judge-name" placeholder="e.g. Maya Patel">
-        </div>
-        <div class="form-group">
-          <label>Projects seen (N)</label>
-          <input type="number" id="rank-n" value="10" min="1" max="20" style="width:80px">
         </div>
         <div class="btn-row" style="margin-top:8px">
           <button class="btn btn-primary" onclick="saveRankings()">💾 Save Rankings</button>
@@ -461,10 +457,10 @@
   </div>
 
   <div style="margin-top:28px">
-    <div class="section-title">🏆 Global Score Leaderboard</div>
-    <div class="notice">Global score = average of each judge's normalized rank score. Only projects that received at least one ranking are shown.</div>
+    <div class="section-title">🏆 Points Leaderboard</div>
+    <div class="notice">Total points = sum of rank points (1→5 … 5→1) across all judges. Rubric totals break ties. Only projects that received at least one ranking are shown.</div>
     <div id="global-scores-content">
-      <div class="empty-state"><div class="empty-icon">📊</div><p>Enter rankings above to calculate global scores.</p></div>
+      <div class="empty-state"><div class="empty-icon">📊</div><p>Enter rankings above to see total points.</p></div>
     </div>
   </div>
 </div>
@@ -472,7 +468,7 @@
 
 <div class="panel" id="panel-tracks">
   <div class="section-title">Track Winners</div>
-  <div class="notice">Winners are determined by the <strong>highest global score</strong> among teams in each track. Sponsor awards are entered manually below.</div>
+  <div class="notice">Winners are determined by the <strong>highest total points</strong> among teams in each track. Sponsor awards are entered manually below.</div>
   <div id="tracks-content">
     <div class="empty-state"><div class="empty-icon">🎯</div><p>No data yet. Import teams and enter rankings to see track winners.</p></div>
   </div>
@@ -508,7 +504,7 @@ window.dispatchEvent(new Event('firebase-ready'));
 <script>
 // ── STATE ─────────────────────────────────────────────────────────────────────
 let teams = [], scores = {}, rankings = [], sponsorAwards = [], judges = [];
-// rankings    = [{ judge, n, ranks: { teamId: rankNumber }, rubric: { teamId: score } }]
+// rankings    = [{ judge, ranks: { teamId: rankNumber 1–5 }, rubric: { teamId: score } }]
 // sponsorAwards = [{ sponsor, award, project }]
 // judges      = [{ id, name, email, tableIds: [] }]  tableIds = team ids assigned
 
@@ -550,7 +546,6 @@ function getRowLabel(tableNum) {
 
 // ── FIREBASE SYNC ─────────────────────────────────────────────────────────────
 let _fbConnected = false;
-let _lastSavedAt = null;
 // Bumped on every persist(); embedded in RTDB payload. Listener ignores snapshots with
 // a lower _persistGen than local (out-of-order / stale echoes, e.g. empty DB after CSV import).
 let _persistGen = 0;
@@ -669,7 +664,6 @@ function startFirebaseSync() {
         if (id === 'judges')      refreshJudgesTab();
       }
     }, 100);
-    _lastSavedAt = Date.now();
     const el = document.getElementById('autosave-msg');
     if (el) el.textContent = '✅ synced ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
   });
@@ -1102,7 +1096,7 @@ function renderRankInputs() {
       <span style="font-size:0.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.project}">${t.project}</span>
       <div style="display:flex;flex-direction:column;gap:2px;align-items:center">
         <span style="font-size:0.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">Rank</span>
-        <input type="number" min="1" max="20" placeholder="#" data-teamid="${t.id}" data-type="rank"
+        <input type="number" min="1" max="5" placeholder="1–5" data-teamid="${t.id}" data-type="rank"
           value="${rankVal}"
           style="width:60px;font-family:'DM Mono',monospace;text-align:center;padding:5px 4px;font-size:0.85rem"
           oninput="highlightDuplicateRanks()">
@@ -1131,12 +1125,9 @@ function highlightDuplicateRanks() {
   });
 }
 
-// Track last known Firebase version for conflict detection
-
 function saveRankings() {
   const judgeName = document.getElementById('rank-judge-name').value.trim();
   if (!judgeName) return alert('Please enter the judge name.');
-  const n = parseInt(document.getElementById('rank-n').value) || 10;
 
   const rankInputs   = document.querySelectorAll('#rank-inputs input[data-type="rank"]');
   const rubricInputs = document.querySelectorAll('#rank-inputs input[data-type="rubric"]');
@@ -1145,13 +1136,15 @@ function saveRankings() {
   const rubric = {};
   const usedRanks = new Set();
   let hasAny = false;
-  // Partial rankings OK: ≥1 project with a rank; each rank in 1..N; no duplicate rank numbers for this judge.
+  // Partial rankings OK: ≥1 project with a rank; each rank integer 1–5; no duplicate rank numbers for this judge.
 
   for (const inp of rankInputs) {
     const v = inp.value.trim();
     if (!v) continue;
-    const rank = parseInt(v);
-    if (isNaN(rank) || rank < 1 || rank > n) return alert(`Rank "${v}" is out of range. Must be between 1 and ${n}.`);
+    const rank = Number(v);
+    if (!Number.isInteger(rank) || rank < 1 || rank > 5) {
+      return alert(`Rank "${v}" must be a whole number between 1 and 5.`);
+    }
     if (usedRanks.has(rank)) return alert(`Rank ${rank} is used more than once. Each rank number can only be used once.`);
     usedRanks.add(rank);
     ranks[inp.getAttribute('data-teamid')] = rank;
@@ -1167,27 +1160,17 @@ function saveRankings() {
 
   if (!hasAny) return alert('Please enter at least one rank.');
 
-  // Conflict warning — check if Firebase has newer data than what we loaded
   const existingIdx = rankings.findIndex(r => r.judge === judgeName);
-  if (existingIdx >= 0) {
-    const existing = rankings[existingIdx];
-    if (existing._savedAt && _lastSavedAt && existing._savedAt > _lastSavedAt) {
-      if (!confirm(`⚠️ Conflict detected! Someone else may have updated ${judgeName}'s rankings since you loaded this page.\n\nClick OK to overwrite their version, or Cancel to keep theirs.`)) return;
-    }
-  }
-
-  const entry = { judge: judgeName, n, ranks, rubric, _savedAt: Date.now() };
+  const entry = { judge: judgeName, ranks, rubric, _savedAt: Date.now() };
   if (existingIdx >= 0) rankings[existingIdx] = entry;
   else rankings.push(entry);
 
-  _lastSavedAt = Date.now();
   persist();
   renderTeamsTable();
   renderRankingsList();
   renderGlobalScores();
   refreshTracks();
   document.getElementById('rank-judge-name').value = '';
-  document.getElementById('rank-n').value = '10';
   renderRankInputs();
   alert('✅ Rankings saved for ' + judgeName + '!');
 }
@@ -1214,7 +1197,7 @@ function renderRankingsList() {
     return;
   }
   el.innerHTML = `<div class="table-wrap"><table>
-    <thead><tr><th>Judge</th><th>N</th><th>Projects Ranked</th><th>Rankings</th><th></th></tr></thead>
+    <thead><tr><th>Judge</th><th>Projects Ranked</th><th>Rankings</th><th></th></tr></thead>
     <tbody>${rankings.map((r, i) => {
       const ranked = Object.entries(r.ranks).sort((a,b) => a[1]-b[1]);
       const summary = ranked.map(([tid, rank]) => {
@@ -1223,7 +1206,6 @@ function renderRankingsList() {
       }).join(' &nbsp;·&nbsp; ');
       return `<tr>
         <td style="font-weight:500">${r.judge}</td>
-        <td style="font-family:'DM Mono',monospace;color:var(--muted)">${r.n}</td>
         <td style="font-family:'DM Mono',monospace;color:var(--muted)">${ranked.length}</td>
         <td style="font-size:0.82rem;line-height:1.8">${summary}</td>
         <td><button class="btn btn-secondary" style="padding:5px 10px;font-size:0.75rem" onclick="editRanking(${i})">✏️ Edit</button>
@@ -1233,45 +1215,56 @@ function renderRankingsList() {
   </table></div>`;
 }
 
-function calcGlobalScores() {
-  // For each team, collect all normalized scores from each judge who ranked them
-  const teamScores = {}; // teamId -> [normalizedScore, ...]
+function sumRubricPointsForTeam(teamId) {
+  let s = 0;
+  const want = String(teamId);
   rankings.forEach(r => {
-    const n = r.n || 10;
-    const denom = n <= 1 ? 1 : n - 1;
+    const rub = r.rubric || {};
+    for (const k of Object.keys(rub)) {
+      if (String(k) !== want) continue;
+      const v = rub[k];
+      if (typeof v === 'number' && !Number.isNaN(v)) s += v;
+    }
+  });
+  return s;
+}
+
+function calcGlobalScores() {
+  const POINTS = { 1: 5, 2: 4, 3: 3, 4: 2, 5: 1 };
+  const teamPoints = {};
+  const teamCounts = {};
+  rankings.forEach(r => {
     Object.entries(r.ranks || {}).forEach(([tid, rank]) => {
-      const normalized = (n - rank) / denom;
-      if (!teamScores[tid]) teamScores[tid] = [];
-      teamScores[tid].push(normalized);
+      const rk = parseInt(rank, 10);
+      const pts = POINTS[rk] || 0;
+      teamPoints[tid] = (teamPoints[tid] || 0) + pts;
+      teamCounts[tid] = (teamCounts[tid] || 0) + 1;
     });
   });
-
-  // Average per team
-  return Object.entries(teamScores).map(([tid, arr]) => {
+  return Object.entries(teamPoints).map(([tid, pts]) => {
     const team = teams.find(t => String(t.id) === String(tid));
-    const avg = arr.reduce((s,v) => s+v, 0) / arr.length;
-    return { tid, team, avg: Math.round(avg * 1000) / 1000, count: arr.length };
-  }).sort((a,b) => b.avg - a.avg);
+    return { tid, team, avg: pts, count: teamCounts[tid] || 0 };
+  }).sort((a, b) => {
+    if (b.avg !== a.avg) return b.avg - a.avg;
+    return sumRubricPointsForTeam(b.tid) - sumRubricPointsForTeam(a.tid);
+  });
 }
 
 function renderGlobalScores() {
   const el = document.getElementById('global-scores-content');
   const results = calcGlobalScores();
   if (!results.length) {
-    el.innerHTML = '<div class="empty-state"><div class="empty-icon">📊</div><p>Enter rankings above to calculate global scores.</p></div>';
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">📊</div><p>Enter rankings above to see total points.</p></div>';
     return;
   }
   const rc = i => i===0?'rank-1':i===1?'rank-2':i===2?'rank-3':'';
   el.innerHTML = `<div class="table-wrap"><table>
-    <thead><tr><th>Rank</th><th>Project</th><th>Submitter</th><th>Global Score</th><th>Judges who ranked</th></tr></thead>
+    <thead><tr><th>Rank</th><th>Project</th><th>Submitter</th><th>Points</th><th>Judges who ranked</th></tr></thead>
     <tbody>${results.map((r, i) => `<tr>
       <td><span class="rank-num ${rc(i)}">${i+1}</span></td>
       <td style="font-weight:500">${r.team ? r.team.project : '(unknown)'}</td>
       <td style="color:var(--muted)">${r.team ? r.team.submitter : '—'}</td>
-      <td>
-        <span class="score-pill">${r.avg.toFixed(3)}</span>
-        <span style="color:var(--muted);font-size:0.78rem;margin-left:6px">/ 1.000</span>
-      </td>
+      <td><span class="score-pill">${Math.round(r.avg)} pts</span></td>
       <td style="font-family:'DM Mono',monospace;color:var(--muted)">${r.count}</td>
     </tr>`).join('')}</tbody>
   </table></div>`;
@@ -1732,13 +1725,13 @@ function refreshLeaderboard() {
 
   const rc = i => i===0?'rank-1':i===1?'rank-2':i===2?'rank-3':'';
   area.innerHTML = `<div class="table-wrap"><table>
-    <thead><tr><th>Rank</th><th>Project</th><th>Submitter</th><th>Global Score</th><th>Judges who ranked</th><th>Tracks</th></tr></thead>
+    <thead><tr><th>Rank</th><th>Project</th><th>Submitter</th><th>Points</th><th>Judges who ranked</th><th>Tracks</th></tr></thead>
     <tbody>
     ${globalResults.map((r,i) => `<tr>
       <td><span class="rank-num ${rc(i)}">${i+1}</span></td>
       <td style="font-weight:500">${r.team ? r.team.project : '?'}</td>
       <td style="color:var(--muted)">${r.team ? r.team.submitter : '—'}</td>
-      <td><span class="score-pill">⚡ ${r.avg.toFixed(3)} <span style="color:var(--muted)">/ 1.000</span></span></td>
+      <td><span class="score-pill">⚡ ${Math.round(r.avg)} pts</span></td>
       <td style="font-family:'DM Mono',monospace;color:var(--muted)">${r.count}</td>
       <td>${r.team ? r.team.tracks.map(trackBadge).join('') : '—'}</td>
     </tr>`).join('')}
@@ -1800,7 +1793,10 @@ function refreshTracks() {
       .filter(t => teamEligibleForTrack(t, trackId))
       .map(t => ({ ...t, gs: globalMap[String(t.id)] }))
       .filter(t => t.gs && typeof t.gs.avg === 'number' && !Number.isNaN(t.gs.avg))
-      .sort((a,b) => b.gs.avg - a.gs.avg)
+      .sort((a, b) => {
+        if (b.gs.avg !== a.gs.avg) return b.gs.avg - a.gs.avg;
+        return sumRubricPointsForTeam(b.id) - sumRubricPointsForTeam(a.id);
+      })
       .slice(0, n);
   }
 
@@ -1812,7 +1808,7 @@ function refreshTracks() {
       const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}.`;
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:0.82rem">
         <span>${medal} <span style="color:var(--text)">${escapeHtml(t.project)}</span> <span style="color:var(--muted);font-size:0.75rem">· ${escapeHtml(t.submitter)}</span></span>
-        <span class="score-pill" style="font-size:0.72rem">${t.gs.avg.toFixed(3)}</span>
+        <span class="score-pill" style="font-size:0.72rem">${Math.round(t.gs.avg)} pts</span>
       </div>`;
     }).join('');
 
@@ -1821,9 +1817,9 @@ function refreshTracks() {
       <div class="track-name">${track.icon} ${escapeHtml(track.label)} <span style="float:right;font-size:0.65rem;color:var(--muted)">click to expand ▾</span></div>
       ${winner
         ? `<div class="track-winner">${escapeHtml(winner.project)}</div>
-           <div class="track-score">${escapeHtml(winner.submitter)} · ${winner.gs.avg.toFixed(3)}</div>
-           ${ru1 ? `<div style="margin-top:6px;font-size:0.82rem;color:var(--muted)">🥈 ${escapeHtml(ru1.project)} · ${ru1.gs.avg.toFixed(3)}</div>` : ''}
-           ${ru2 ? `<div style="margin-top:6px;font-size:0.82rem;color:var(--muted)">🥉 ${escapeHtml(ru2.project)} · ${ru2.gs.avg.toFixed(3)}</div>` : ''}`
+           <div class="track-score">${escapeHtml(winner.submitter)} · ${Math.round(winner.gs.avg)} pts</div>
+           ${ru1 ? `<div style="margin-top:6px;font-size:0.82rem;color:var(--muted)">🥈 ${escapeHtml(ru1.project)} · ${Math.round(ru1.gs.avg)} pts</div>` : ''}
+           ${ru2 ? `<div style="margin-top:6px;font-size:0.82rem;color:var(--muted)">🥉 ${escapeHtml(ru2.project)} · ${Math.round(ru2.gs.avg)} pts</div>` : ''}`
         : `<div class="track-winner" style="color:var(--muted);font-size:0.88rem">No eligible ranked teams</div>`}
       <div id="${expandId}" style="display:none;margin-top:12px;padding-top:12px;border-top:2px solid var(--border)">
         <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Full Rankings for this Track</div>
@@ -1837,7 +1833,7 @@ function refreshTracks() {
   if (!globalResults.length) {
     const anyRanks = rankings.some(r => r.ranks && Object.keys(r.ranks).length);
     html += anyRanks
-      ? `<div class="notice" style="margin-bottom:16px"><strong>Track tab:</strong> Rankings are saved but no global scores were computed. Check that each judge&apos;s <strong>Projects seen (N)</strong> is at least <strong>2</strong> (N=1 breaks the score formula).</div>`
+      ? `<div class="notice" style="margin-bottom:16px"><strong>Track tab:</strong> Rankings are saved but no point totals were computed (no valid rank 1–5 entries yet).</div>`
       : `<div class="notice" style="margin-bottom:16px"><strong>Track tab:</strong> Enter and save judge rankings on tab ③ first — winners are derived from those rankings.</div>`;
   } else if (rankedButNoTrack.length) {
     html += `<div class="notice" style="margin-bottom:16px"><strong>${rankedButNoTrack.length} ranked project(s)</strong> have <strong>no track tags</strong> from the CSV (or tracks were cleared). They are listed under <strong>Wildcard</strong> only until you edit the team and assign tracks on tab ①.</div>`;
@@ -1852,7 +1848,7 @@ function refreshTracks() {
     html += `<div class="track-card" style="${i >= 3 ? 'opacity:0.7' : ''}">
       <div class="track-name">${escapeHtml(lbl)}</div>
       ${r ? `<div class="track-winner">${r.team ? escapeHtml(r.team.project) : '?'}</div>
-             <div class="track-score">${r.team ? escapeHtml(r.team.submitter) : ''} · ${r.avg.toFixed(3)}</div>`
+             <div class="track-score">${r.team ? escapeHtml(r.team.submitter) : ''} · ${Math.round(r.avg)} pts</div>`
           : `<div class="track-winner" style="color:var(--muted)">TBD</div>`}
     </div>`;
   });
@@ -1996,7 +1992,6 @@ function editRanking(idx) {
   const r = rankings[idx];
   if (!r) return;
   document.getElementById('rank-judge-name').value = r.judge;
-  document.getElementById('rank-n').value = r.n;
   // Switch to rankings tab
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -2023,21 +2018,15 @@ function runValidationCheck() {
   const noJudge = teams.filter(t => !assignedTeamIds.has(String(t.id)));
   if (noJudge.length) issues.push(`⚠️ ${noJudge.length} teams have no judge assigned`);
 
-  // Check 3: too many ranked rows vs N, or rank values outside 1..N
+  // Check 3: rank values must be integers 1–5
   rankings.forEach(r => {
-    const n = Number(r.n);
-    const nMax = (Number.isFinite(n) && n >= 1) ? n : 10;
     const entries = Object.entries(r.ranks || {});
-    const ranked = entries.length;
-    if (ranked > nMax) {
-      issues.push(`⚠️ ${r.judge}: ranked ${ranked} projects but N=${nMax} (cannot rank more than N)`);
-    }
     const badVals = entries.filter(([, v]) => {
-      const rank = parseInt(v, 10);
-      return isNaN(rank) || rank < 1 || rank > nMax;
+      const rank = Number(v);
+      return !Number.isInteger(rank) || rank < 1 || rank > 5;
     });
     if (badVals.length) {
-      issues.push(`⚠️ ${r.judge}: ${badVals.length} rank value(s) out of range (must be integers 1–${nMax})`);
+      issues.push(`⚠️ ${r.judge}: ${badVals.length} rank value(s) out of range (must be integers 1–5)`);
     }
   });
 
