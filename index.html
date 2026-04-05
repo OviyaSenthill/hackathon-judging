@@ -375,6 +375,7 @@
     <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
       <button class="btn btn-primary" onclick="autoAssignJudges()">🎲 Auto-Assign Tables to Judges</button>
       <button class="btn btn-success" onclick="exportJudgeAssignments()">↓ Export Assignments CSV</button>
+      <button class="btn btn-secondary" onclick="printJudgeAssignmentSheet()">↓ Print Assignment Sheet</button>
       <button class="btn btn-danger" onclick="clearAllJudges()">🗑️ Clear All Judges</button>
       <span style="font-size:0.82rem;color:var(--muted)" id="assign-stats"></span>
     </div>
@@ -528,6 +529,26 @@ const TRACKS = [
 ];
 const TMAP = {}; TRACKS.forEach(t => TMAP[t.id] = t);
 
+const CORNER_CSE_ROOM_LABEL = 'Corner CSE Room';
+
+function isMCACornerTeamByProject(t) {
+  return !!(t && (t.project || '').trim().toUpperCase() === 'MCA');
+}
+
+function isMCACornerTeam(t) {
+  if (!t) return false;
+  if (t.specialRoom === CORNER_CSE_ROOM_LABEL) return true;
+  return isMCACornerTeamByProject(t);
+}
+
+function getRowLabel(tableNum) {
+  const n = Number(tableNum);
+  if (!Number.isFinite(n) || n < 1) return '';
+  const start = Math.floor((n - 1) / 10) * 10 + 1;
+  const end = start + 9;
+  return `<span style="font-size:0.68rem;color:var(--muted);margin-left:8px;white-space:nowrap">(${start}–${end})</span>`;
+}
+
 // ── FIREBASE SYNC ─────────────────────────────────────────────────────────────
 let _fbConnected = false;
 let _lastSavedAt = null;
@@ -671,14 +692,28 @@ function switchTab(id, btn) {
 
 function autoAssignTableNumbers() {
   if (!teams.length) return alert('Import teams first.');
-  if (!confirm(`Auto-number all ${teams.length} teams with table numbers 1–${teams.length}?`)) return;
-  teams = teams.map((t, i) => ({ ...t, tableNum: i + 1 }));
+  const mcaTeams = teams.filter(isMCACornerTeamByProject);
+  const nNum = teams.length - mcaTeams.length;
+  const msg = mcaTeams.length
+    ? `${teams.length} teams: ${mcaTeams.length} MCA (Hardware) → Corner CSE Room (no table #); the other ${nNum} get numbers 1–${nNum}. Continue?`
+    : `Auto-number all ${teams.length} teams with table numbers 1–${teams.length}?`;
+  if (!confirm(msg)) return;
+  let tableCounter = 1;
+  teams = teams.map(t => {
+    if (isMCACornerTeamByProject(t))
+      return { ...t, tableNum: null, specialRoom: CORNER_CSE_ROOM_LABEL };
+    return { ...t, tableNum: tableCounter++, specialRoom: null };
+  });
   persist(); renderTeamsTable(); refreshJudgesTab();
 }
 
 function clearTableNumbers() {
   if (!confirm('Clear all table numbers?')) return;
-  teams = teams.map(t => ({ ...t, tableNum: null }));
+  teams = teams.map(t => {
+    const o = { ...t, tableNum: null };
+    delete o.specialRoom;
+    return o;
+  });
   persist(); renderTeamsTable(); refreshJudgesTab();
 }
 
@@ -768,23 +803,69 @@ window.doReinstate = function(idx) {
   persist(); refreshJudgesTab();
 };
 
+function fisherYatesShuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function judgeWithFewestAssignments() {
+  const active = judges.filter(j => !j.absent);
+  if (!active.length) return null;
+  let best = active[0];
+  let minL = best.tableIds.length;
+  active.forEach(j => {
+    if (j.tableIds.length < minL) {
+      minL = j.tableIds.length;
+      best = j;
+    }
+  });
+  return best;
+}
+
 function autoAssignJudges() {
   if (!judges.length) return alert('Add judges first.');
-  const numbered = teams.filter(t => t.tableNum);
-  if (!numbered.length) return alert('Assign table numbers to teams first (Step 1).');
-  if (!confirm(`Auto-assign ${numbered.length} tables to ${judges.length} judges (~${Math.ceil(numbered.length/judges.length)} tables each)?\n\nThis will clear existing assignments.`)) return;
+  const assignable = teams.filter(t =>
+    (t.tableNum != null && t.tableNum !== '') || isMCACornerTeam(t)
+  );
+  if (!assignable.length) {
+    return alert('Assign table numbers first (Step 1 — Auto-Number All Teams). MCA uses Corner CSE Room without a number.');
+  }
+  if (!confirm(`Auto-assign ${assignable.length} project(s) to ${judges.length} judges using a random shuffle.\nMCA (Corner CSE Room) goes to the judge with the fewest tables.\n\nThis clears existing assignments. Continue?`)) return;
 
-  // Clear existing
   judges = judges.map(j => ({ ...j, tableIds: [] }));
 
-  // Sort teams by table number, then round-robin assign
-  const sorted = [...numbered].sort((a,b) => (a.tableNum||0) - (b.tableNum||0));
-  sorted.forEach((team, i) => {
+  const mcaList = assignable.filter(isMCACornerTeam);
+  const others = fisherYatesShuffle(assignable.filter(t => !isMCACornerTeam(t)));
+
+  others.forEach((team, i) => {
     judges[i % judges.length].tableIds.push(team.id);
   });
 
+  const mcaNotifyNames = [];
+  mcaList.forEach(team => {
+    const j = judgeWithFewestAssignments();
+    if (j) {
+      j.tableIds.push(team.id);
+      mcaNotifyNames.push(j.name);
+    }
+  });
+
   persist(); refreshJudgesTab();
-  alert(`✅ Tables assigned! Each judge has ${Math.floor(numbered.length/judges.length)}–${Math.ceil(numbered.length/judges.length)} tables.`);
+
+  const lo = Math.floor(assignable.length / judges.length);
+  const hi = Math.ceil(assignable.length / judges.length);
+  let msg = `✅ Tables assigned randomly! Each judge has about ${lo}–${hi} assignment(s).`;
+  if (mcaList.length && mcaNotifyNames.length) {
+    const who = [...new Set(mcaNotifyNames)].join(', ');
+    msg += `\n\n📍 Corner CSE Room (MCA Hardware) → ${who}\nPlease notify them — they cover the hardware hack.`;
+  } else if (mcaList.length && !mcaNotifyNames.length) {
+    msg += '\n\n⚠️ MCA could not be assigned (no active judges).';
+  }
+  alert(msg);
 }
 
 function markAbsent(judgeIdx) {
@@ -802,11 +883,11 @@ function markAbsent(judgeIdx) {
     const target = available[i % available.length];
     target.tableIds.push(tid);
     const team = teams.find(t => String(t.id) === String(tid));
-    reassigned.push({ table: team?.tableNum || '?', project: team?.project || '?', to: target.name });
+    reassigned.push({ table: team ? assignmentTableLabelForTeam(team) : '?', project: team?.project || '?', to: target.name });
   });
   absent.tableIds = [];
   persist(); refreshJudgesTab();
-  const summary = reassigned.map(r => '  Table ' + r.table + ' (' + r.project + ') → ' + r.to).join('\n');
+  const summary = reassigned.map(r => '  ' + r.table + ' (' + r.project + ') → ' + r.to).join('\n');
   alert('✅ Redistributed ' + reassigned.length + ' tables from ' + absent.name + ':\n\n' + summary + '\n\nPlease notify affected judges of their updated assignments.');
 }
 window.markAbsent = markAbsent;
@@ -819,25 +900,114 @@ function reinstateJudge(judgeIdx) {
 }
 window.reinstateJudge = reinstateJudge;
 
+function assignmentTableLabelForTeam(team) {
+  if (!team) return '?';
+  if (team.specialRoom) return team.specialRoom;
+  if (isMCACornerTeamByProject(team)) return CORNER_CSE_ROOM_LABEL;
+  const tn = team.tableNum;
+  if (tn != null && String(tn).trim().toUpperCase() === 'MCA') return CORNER_CSE_ROOM_LABEL;
+  if (tn != null && tn !== '') return String(tn);
+  return '?';
+}
+
+function compareAssignmentTableLabels(a, b) {
+  const rank = (l) => {
+    if (l === CORNER_CSE_ROOM_LABEL) return { g: 3, n: 0 };
+    if (l === '?') return { g: 2, n: 0 };
+    const num = Number(l);
+    if (!Number.isNaN(num) && String(num) === String(l).trim()) return { g: 0, n: num };
+    return { g: 1, s: String(l) };
+  };
+  const ra = rank(a), rb = rank(b);
+  if (ra.g !== rb.g) return ra.g - rb.g;
+  if (ra.g === 0) return ra.n - rb.n;
+  if (ra.g === 1) return ra.s.localeCompare(rb.s);
+  return 0;
+}
+
+function judgeAssignedTableLabels(judge) {
+  const labels = judge.tableIds.map(tid => {
+    const t = teams.find(tm => String(tm.id) === String(tid));
+    return assignmentTableLabelForTeam(t);
+  });
+  labels.sort(compareAssignmentTableLabels);
+  return labels;
+}
+
+function csvEscapeCell(val) {
+  const s = String(val ?? '');
+  if (/[",\r\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
 function exportJudgeAssignments() {
   if (!judges.length) return alert('No judges to export.');
-  const rows = [['Judge Name', 'Email', 'Status', 'Table Numbers', 'Projects']];
+  const rows = [['Judge Name', 'Assigned Tables']];
   judges.forEach(j => {
-    const tables = j.tableIds.map(tid => {
-      const t = teams.find(tm => String(tm.id) === String(tid));
-      return t ? `${t.tableNum || '?'}` : '?';
-    }).join(', ');
-    const projects = j.tableIds.map(tid => {
-      const t = teams.find(tm => String(tm.id) === String(tid));
-      return t ? t.project : '?';
-    }).join(', ');
-    rows.push([j.name, j.email || '', j.absent ? 'ABSENT' : 'Active', tables, projects]);
+    rows.push([j.name, judgeAssignedTableLabels(j).join(', ')]);
   });
-  const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+  const csv = rows.map(r => r.map(csvEscapeCell).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
   a.download = 'judge-assignments.csv'; a.click();
 }
+
+function escapePrintDoc(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function printJudgeAssignmentSheet() {
+  if (!judges.length) return alert('No judges to print.');
+  const when = new Date().toLocaleString(undefined, { dateStyle: 'long', timeStyle: 'short' });
+  const bodyRows = judges.map(j => {
+    const tables = escapePrintDoc(judgeAssignedTableLabels(j).join(', '));
+    return `<tr><td>${escapePrintDoc(j.name)}</td><td>${tables}</td></tr>`;
+  }).join('');
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Judge Assignments — Print</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 12pt; margin: 0; padding: 24px; color: #000; background: #fff; }
+  .no-print { font-size: 10pt; color: #444; margin-bottom: 16px; }
+  .doc-title { font-size: 14pt; font-weight: bold; margin: 0 0 6px 0; }
+  .doc-meta { font-size: 10pt; margin: 0 0 20px 0; color: #222; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  th, td { border: 1px solid #000; padding: 10px 12px; text-align: left; vertical-align: top; word-wrap: break-word; }
+  th { background: #f0f0f0; font-weight: bold; }
+  tr { page-break-inside: avoid; }
+  @media print {
+    .no-print { display: none !important; }
+    body { padding: 12pt; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    table { font-size: 12pt; }
+  }
+</style></head><body>
+<p class="no-print">If the print dialog does not open, use <strong>File → Print</strong>. You can close this tab after printing.</p>
+<h1 class="doc-title">DiamondHacks 2026 — Judge Assignments</h1>
+<p class="doc-meta">${escapePrintDoc(when)}</p>
+<table>
+<thead><tr><th style="width:32%">Judge Name</th><th>Assigned Tables</th></tr></thead>
+<tbody>${bodyRows}</tbody>
+</table>
+<script>
+(function(){
+  function doPrint() {
+    window.focus();
+    window.print();
+  }
+  if (document.readyState === 'complete') setTimeout(doPrint, 100);
+  else window.addEventListener('load', function() { setTimeout(doPrint, 100); });
+})();
+<\/script>
+</body></html>`;
+  const w = window.open('', '_blank');
+  if (!w) return alert('Pop-up blocked — allow pop-ups for this site to print.');
+  w.document.write(html);
+  w.document.close();
+}
+window.printJudgeAssignmentSheet = printJudgeAssignmentSheet;
 
 function refreshJudgesTab() {
   document.getElementById('judge-count').textContent = `(${judges.length})`;
@@ -856,10 +1026,7 @@ function refreshJudgesTab() {
     el.innerHTML = `<div class="table-wrap"><table>
       <thead><tr><th>Judge</th><th>Email</th><th>Status</th><th>Tables</th><th>Projects Assigned</th><th></th></tr></thead>
       <tbody>${judges.map((j, i) => {
-        const tableNums = j.tableIds.map(tid => {
-          const t = teams.find(tm => String(tm.id) === String(tid));
-          return t ? (t.tableNum || '?') : '?';
-        }).sort((a,b) => a-b).join(', ');
+        const tableNums = judgeAssignedTableLabels(j).join(', ');
         const statusBadge = j.absent
           ? `<span class="badge badge-health">ABSENT</span>`
           : `<span class="badge badge-scored">Active</span>`;
@@ -883,7 +1050,12 @@ function refreshJudgesTab() {
   // Render table assignments
   const tbody = document.getElementById('table-assignments-tbody');
   if (!tbody) return;
-  const numbered = teams.filter(t => t.tableNum).sort((a,b) => a.tableNum - b.tableNum);
+  const numbered = teams.filter(t => (t.tableNum != null && t.tableNum !== '') || t.specialRoom)
+    .sort((a, b) => {
+      const am = isMCACornerTeam(a) ? 1 : 0, bm = isMCACornerTeam(b) ? 1 : 0;
+      if (am !== bm) return am - bm;
+      return (Number(a.tableNum) || 0) - (Number(b.tableNum) || 0);
+    });
   if (!numbered.length) {
     tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">🗂️</div><p>No table numbers assigned yet.</p></div></td></tr>';
     return;
@@ -895,7 +1067,7 @@ function refreshJudgesTab() {
       : '<span style="color:var(--muted);font-size:0.8rem">Unassigned</span>';
     const badges = t.tracks.map(trackBadge).join('') || '—';
     return `<tr>
-      <td style="font-family:'DM Mono',monospace;font-weight:600;color:var(--accent)">${t.tableNum}</td>
+      <td style="font-family:'DM Mono',monospace;font-weight:600;color:var(--accent)">${assignmentTableLabelForTeam(t)}</td>
       <td style="font-weight:500">${t.project}</td>
       <td style="color:var(--muted);font-size:0.85rem">${t.submitter}</td>
       <td>${badges}</td>
@@ -1201,7 +1373,7 @@ function parseDevpostCSV() {
     const titleIdx    = col('project title', 'submission title', 'project name', 'title');
     const tableIdx    = col('table number', 'table #', 'table num');
     const mainTrackIdx    = col('please select a main track', 'select a main track', 'please select a track', 'select a track');
-    const sponsorTrackIdx = col('select a sponsor track', 'sponsor track');
+    const sponsorTrackIdx = col('select a sponsor track', 'sponsor track', 'sponsor / special prizes', 'sponsor/special');
     const sideTrackIdx    = col('select a side track', 'side track');
     const prizesIdx       = col('opt-in prizes', 'prizes');
     const firstIdx    = col('submitter first name', 'first name');
@@ -1270,15 +1442,17 @@ function parseDevpostCSV() {
       const conflict = hasSolo && hasDuo;
       if (conflict) conflicts.push(title);
 
-    const row = {
-      id: Date.now() + i,
-      project: title,
-      submitter: [first, last].filter(Boolean).join(' ') || 'Unknown',
-      tracks: [...tset],
-      tableNum,
-    };
-    if (conflict) row.conflict = true;
-    added.push(row);
+      const isMCA = title.trim().toUpperCase() === 'MCA';
+      const row = {
+        id: Date.now() + i,
+        project: title,
+        submitter: [first, last].filter(Boolean).join(' ') || 'Unknown',
+        tracks: [...tset],
+        tableNum: isMCA ? null : tableNum,
+      };
+      if (isMCA) row.specialRoom = CORNER_CSE_ROOM_LABEL;
+      if (conflict) row.conflict = true;
+      added.push(row);
     }
 
     log('7) Data rows skipped (empty title): ' + skippedRows + '. Projects parsed: ' + added.length + '.');
@@ -1295,7 +1469,7 @@ function parseDevpostCSV() {
     scores = {};
     rankings = [];
 
-    const hasTableNums = added.some(t => t.tableNum);
+    const hasTableNums = added.some(t => t.tableNum != null || t.specialRoom);
 
     log('9) Assigned teams.length = ' + teams.length + ' (in memory).');
     log('10) Firebase: _fbSet ' + (typeof window._fbSet === 'function' ? 'available' : 'NOT READY (will use localStorage only in persist)') + '.');
@@ -1316,7 +1490,7 @@ function parseDevpostCSV() {
     setCsvParseDebug(lines);
 
     let msg = '✅ Imported ' + added.length + ' projects!';
-    if (hasTableNums) msg += '\n📋 Table numbers imported from CSV.';
+    if (hasTableNums) msg += '\n📋 Table numbers / room info imported from CSV.';
     if (conflicts.length) msg += '\n\n⚠️ Solo+Duo conflict detected on ' + conflicts.length + ' project(s):\n' + conflicts.join('\n') + '\n\nThese teams are flagged in red — remove them from one track manually.';
     alert(msg);
   } catch (err) {
@@ -1333,7 +1507,12 @@ function addManualTeam() {
   const submitter = document.getElementById('manual-team').value.trim();
   const tracks    = Array.from(document.getElementById('manual-tracks').selectedOptions).map(o => o.value);
   if (!project) return alert('Please enter a project name.');
-  teams.push({ id: Date.now(), project, submitter: submitter || 'Unknown', tracks });
+  const row = { id: Date.now(), project, submitter: submitter || 'Unknown', tracks };
+  if (project.toUpperCase() === 'MCA') {
+    row.tableNum = null;
+    row.specialRoom = CORNER_CSE_ROOM_LABEL;
+  }
+  teams.push(row);
   renderTeamsTable(); updateProjectSelect(); updateStats(); persist();
   document.getElementById('manual-project').value = '';
   document.getElementById('manual-team').value = '';
@@ -1408,7 +1587,9 @@ window.doEditTeam = function(idx) {
       </div>
       <div class="form-group">
         <label>Table Number</label>
-        <input type="number" id="edit-table" value="${t.tableNum||''}" style="width:80px">
+        ${isMCACornerTeam(t)
+          ? '<div style="font-size:0.85rem;color:var(--muted);line-height:1.4">📍 <strong>Corner CSE Room</strong> (MCA Hardware). No table number — use <strong>Auto-Number All Teams</strong> if this row lost its room label.</div>'
+          : `<input type="number" id="edit-table" value="${t.tableNum != null ? t.tableNum : ''}" style="width:80px">`}
       </div>
       <div class="form-group">
         <label style="margin-bottom:8px;display:block">Tracks</label>
@@ -1427,7 +1608,12 @@ window.saveEditTeam = function(idx) {
   idx = parseInt(idx);
   const project   = document.getElementById('edit-project').value.trim();
   const submitter = document.getElementById('edit-submitter').value.trim();
-  const tableNum  = parseInt(document.getElementById('edit-table').value) || null;
+  const tableEl   = document.getElementById('edit-table');
+  let tableNum = null;
+  if (tableEl) {
+    const parsed = parseInt(tableEl.value, 10);
+    tableNum = Number.isNaN(parsed) ? null : parsed;
+  }
   const tracks    = Array.from(document.querySelectorAll('#edit-track-checks input:checked')).map(c => c.value);
 
   if (!project) return alert('Project name cannot be empty.');
@@ -1436,7 +1622,15 @@ window.saveEditTeam = function(idx) {
   const hasDuo  = tracks.includes('Best Duo Hack');
   const conflict = hasSolo && hasDuo;
 
-  teams[idx] = { ...teams[idx], project, submitter: submitter||'Unknown', tableNum, tracks };
+  const base = { ...teams[idx], project, submitter: submitter || 'Unknown', tracks };
+  if (project.toUpperCase() === 'MCA') {
+    base.tableNum = null;
+    base.specialRoom = CORNER_CSE_ROOM_LABEL;
+  } else {
+    base.tableNum = tableNum;
+    delete base.specialRoom;
+  }
+  teams[idx] = base;
   if (conflict) teams[idx].conflict = true;
   else delete teams[idx].conflict;
   persist(); renderTeamsTable(); refreshJudgesTab();
@@ -1483,11 +1677,17 @@ function renderTeamsTable() {
       ? `<span class="badge badge-health" title="This team selected both Solo and Duo hack — remove one manually">⚠️ Solo+Duo conflict</span>`
       : '';
     const rowStyle = t.conflict ? 'background:rgba(255,101,132,0.06)' : '';
-    return `<tr style="${rowStyle}">
-      <td><input type="number" min="1" value="${t.tableNum||''}" placeholder="—"
+    const mcaHardware = isMCACornerTeam(t);
+    const cornerBadge = `<span style="display:inline-flex;align-items:center;padding:6px 10px;border-radius:8px;background:rgba(108,99,255,0.22);border:1px solid rgba(139,92,246,0.5);color:#d8ccff;font-size:0.78rem;font-weight:600">📍 Corner CSE Room</span>`;
+    const tableCell = mcaHardware
+      ? cornerBadge
+      : `<span style="display:inline-flex;align-items:center;flex-wrap:wrap;gap:6px"><input type="number" min="1" value="${t.tableNum != null ? t.tableNum : ''}" placeholder="—"
         style="width:60px;font-family:'DM Mono',monospace;text-align:center;padding:4px 6px;font-size:0.82rem;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text)"
-        onchange="setTableNum(${i}, this.value)"></td>
-      <td style="font-weight:500">${t.project}</td>
+        onchange="setTableNum(${i}, this.value)">${getRowLabel(t.tableNum)}</span>`;
+    const hwTag = mcaHardware ? '<span title="Hardware hack (MCA)" style="font-size:0.8rem;margin-left:8px;opacity:0.9">🔧</span>' : '';
+    return `<tr style="${rowStyle}">
+      <td>${tableCell}</td>
+      <td style="font-weight:500">${t.project}${hwTag}</td>
       <td style="color:var(--muted);font-size:0.82rem">${t.submitter}</td>
       <td>${badges} ${conflictFlag}</td>
       <td>${status}</td>
@@ -1498,8 +1698,11 @@ function renderTeamsTable() {
 }
 
 function setTableNum(idx, val) {
-  const num = parseInt(val);
-  teams[idx].tableNum = isNaN(num) ? null : num;
+  const t = teams[idx];
+  if (!t || isMCACornerTeam(t)) return;
+  const num = parseInt(val, 10);
+  t.tableNum = Number.isNaN(num) ? null : num;
+  delete t.specialRoom;
   persist();
 }
 window.setTableNum = setTableNum;
